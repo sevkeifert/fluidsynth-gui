@@ -22,10 +22,10 @@
 # System Requirements
 #	jack/QjackCtl	
 #	fluidsynth (you should configure for command line first)
-#	Python 2.7
-#	wxpython
+#	Python 2.7+
+#	python-wxgtk2.8+
 #
-# Tested with: xubuntu 12.04, FluidSynth version 1.1.6
+# Tested with: xubuntu 14.04, FluidSynth version 1.1.6
 
 import sys 
 import os 
