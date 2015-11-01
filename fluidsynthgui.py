@@ -265,7 +265,6 @@ class FluidSynthGui(wx.Frame):
 		row.Add( wx.StaticText(panel, label='Instruments') ,flag=wx.LEFT, border=5, proportion=1)
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
-
 		# row3
 		row = wx.BoxSizer(wx.HORIZONTAL)
 		row.Add(self.listSf,proportion=1)
@@ -277,7 +276,6 @@ class FluidSynthGui(wx.Frame):
 		row = wx.BoxSizer(wx.HORIZONTAL)
 		row.Add(wx.StaticText(panel, label='Filter Fonts'),flag=wx.LEFT, border=10, proportion=1)
 		row.Add(self.textfilterSoundFont,proportion=4)
-		#row.Add(wx.StaticText(panel, label='filter *'),flag=wx.LEFT, border=10, proportion=1)
 
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
@@ -371,15 +369,12 @@ class FluidSynthGui(wx.Frame):
 	# keep scrolling id in bounds
 	def incrementInst(self,id,add=0):
 		id+=add
-		#try:
 		if ( id < 0 ):
 			id = 0
 		size = len(self.instruments)
 		if ( id >= size ):
 			id = size - 1
 		return id
-		#except:
-		#	return 0
 
 	# api 
 	def grep(self, pattern, word_list):
@@ -387,7 +382,8 @@ class FluidSynthGui(wx.Frame):
 	    return [elem for elem in word_list if expr.match(elem)]
 
 	def filterSoundFont(self):
-		return self.grep(self.textfilterSoundFont.GetValue(),self.soundFontsAll);
+		lst = self.grep(self.textfilterSoundFont.GetValue(),self.soundFontsAll);
+		return sorted(lst, key=lambda s: s.lower())
 
 	def filterInstruments(self):
 		return self.instrumentsAll;
@@ -404,7 +400,6 @@ class FluidSynthGui(wx.Frame):
 
 	# instrument
 	def refreshInstruments(self):
-		#self.instrumentsAll = self.fluidsynth.getInstruments()
 		self.instruments = self.filterInstruments()
 		self.listInst.Set(self.instruments)
 		self.listInst.SetSelection(self.instrumentsIdx)
