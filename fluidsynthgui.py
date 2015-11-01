@@ -33,38 +33,45 @@ import wx
 import re
 import subprocess
 
+
+# API
+# this api just writes/reads data to/from the command line interface
 class FluidSynthApi:
 
 	def __init__(self):
-		print "Init fluidsynth..."
 		# start fluidsynth process
+		print "Init fluidsynth..."
 		self.fluidsynth = subprocess.Popen(['fluidsynth'], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
-	# execute command in fluidsynth and read output
+	# execute command in fluidsynth and read output.
 	#
-	# NOTE: This is a very basic version of 'Expect'
-	# The function expects the fluid synth prompt to look like ">"
-	# Example: 
-	#	print cmd("help")
-	# Function will read all outupt and stop at the next ">" prompt
-	def cmd(self, cmd,readtil='>'):
+	# NOTES: This is a very basic version of 'Expect'.
+	# For example if calling 
+	#	print fluidsynth.cmd("help")
+	# the function will read all output and stop at the next ">" prompt.
+	# The function expects the fluid synth prompt to look like ">".
+	#
+	# Python bug?!  Popen readlines() does not return data.
+	# And, Python doesn't support multiple Popen communicate() calls.
+	# There seems to be a race condition with pipes. 
+	# Overall, IMO subprocess is difficult to work with.
+	#
+	# Workaround: I'll poll input with "\n" write to prevent IO blocking 
+	# on single readline().  Then, I'll drain the output after I know 
+	# the total size of the text response.
+	#
+	# Other possible fixes: use pexpect, or fluidsynth python bindings
+	# but, this will make the script heavier with dependencies.
+	def cmd(self, cmd, readtil='>'):
 
 		p=self.fluidsynth
 		print "- cmd: " + cmd
 
 		lines=''
 		p.stdin.write(cmd + "\n" )
-		count=0
-
-		# ?!  readlines() does not return data.
-		# Seems to be a race condition with pipes.
-		# Python doesn't seem to support multiple Popen communicate()
-		# So, pad input with "\n" to prevent IO blocking on 1 read.
-		# Possible fixes: use pexpect, or fluidsynth python bindings
-		# but, this will make the script heavier with dependencies.
+		count=0 # track \n padding
 
 		while True:
-
 			count += 1
 			p.stdin.write("\n")
 			line = p.stdout.readline()
@@ -72,7 +79,7 @@ class FluidSynthApi:
 
 			if line == readtil:
 				if lines != '':
-					# drain padding 
+					# drain \n padding 
 					for num in range(1,count):
 						p.stdout.readline()
 						
@@ -80,51 +87,49 @@ class FluidSynthApi:
 			else:
 				lines = lines + "\n" + line
 
-
-	# load sound font, for example:
+	# load sound soundfont, for example:
 	#
 	#> load "/home/Music/sf2/Brass 4.SF2"
 	#loaded SoundFont has ID 1
 	#fluidsynth: warning: No preset found on channel 9 [bank=128 prog=0]
+	#> 
 	def loadSoundFont(self, sf2):
 		try:
 			data = self.cmd('load "'+ sf2 +'"')
 			ids = [int(s) for s in data.split() if s.isdigit()]	
-			id = ids[-1]
+			id = ids[-1] # return last item
 			return id
 		except:
 			return -1
 
-
-
-	# remove font from memory, for example:
+	# remove soundfont from memory, for example:
 	#
 	#> fonts
 	#ID  Name
-	# 1  /home/kevins/Music/sf2/Brass 4.SF2
+	# 1  /home/Music/sf2/Brass 4.SF2
+	#> 
 	def getSoundFonts(self):
 		try:
 			data = self.cmd('fonts')
 			ids=data.splitlines()
 					
-			ids = ids[3:]
+			ids = ids[3:] # discard first 3 items (header)
 			ids_clean = []
 			for id in ids:
 				# example:
 				# '1 /home/user/sf2/Choir__Aahs_736KB.sf2'
 				parts = id.split()
 				id2=parts[0]	
-				#name=parts[0]	
 				ids_clean.append(id2)
 			return ids_clean
 		except:
 			print "no fonts parsed"
 
-
-	# remove font from memory, for example:
+	# remove soundfont from memory, for example:
 	#
 	#> unload 1
 	#fluidsynth: warning: No preset found on channel 0 [bank=0 prog=0]
+	#> 
 	def unloadSoundFonts(self):
 		try:
 			ids = self.getSoundFonts()
@@ -133,21 +138,29 @@ class FluidSynthApi:
 		except:
 			print "could not unload fonts"
 
-	# list instruments in sound fon, for example:
+	# list instruments in soundfont, for example:
+	# 
+	#> inst 1
+	#000-000 Dark Violins  
+	#> 
 	def getInstruments(self,id):
 		
 		try:
 			data = self.cmd('inst ' + str(id))
 			ids = data.splitlines()
-			return ids[2:]
+			return ids[2:] # discard first two items (header)
 		except:
 			return []
 
-	# change voice in soundfon, for example:
+	# change voice in soundfont
 	#
-	# takes arg formats
+	# arg formats:
 	#	000-000 Some Voice
 	#	000-000
+	#
+	# for example:
+	#> prog 000 000
+	#> 
 	def setProgram(self,id):
 		try:
 			parts = id.split()			
@@ -157,10 +170,10 @@ class FluidSynthApi:
 		except:
 			return 'error'
 
-
-	# load font, select first program voice
+	# load soundfont, select first program voice
 	# returns (id,array_of_voices)
 	#
+	# for example:
 	#> inst 2
 	#000-000 FF Brass 1
 	#000-001 Orchestral Brass 1
@@ -168,6 +181,7 @@ class FluidSynthApi:
 	#000-003 Trombones
 	#000-004 Trumpets+Trombones
 	#000-005 RolandMcArthurBrs
+	#> 
 	def initSoundFont(self,sf2):
 		try:
 			self.unloadSoundFonts()
@@ -181,7 +195,6 @@ class FluidSynthApi:
 		return (-1,[])
 
 
-
 # GUI
 class FluidSynthGui(wx.Frame):
   
@@ -190,7 +203,6 @@ class FluidSynthGui(wx.Frame):
 			size=(640, 350))
 		# data
 		self.fluidsynth = api 
-		#self.fluidsynthActiveData = (-1,[])  # inst id, voices
 
 		self.soundFontsAll = [] # everything in dir 
 		self.instrumentsAll = [] # everything in dir]
@@ -199,12 +211,12 @@ class FluidSynthGui(wx.Frame):
 		self.soundFontsIdx = 0
 		self.instrumentsIdx = 0
 		self.soundFontsFilter = "" 
-		#self.instrumentsFilter = "" 
 	
 		self.initUI()		
 		self.args()
 		self.Centre()
 		self.Show() 
+
 
 	# command line args
 	#	cmd1 | cmd2 cmd3
@@ -233,13 +245,10 @@ class FluidSynthGui(wx.Frame):
 		self.textSoundFontDir = wx.TextCtrl(panel)
 		self.btnSfDir = wx.Button(panel, label="Browse...")
 		self.textfilterSoundFont = wx.TextCtrl(panel)
-		#self.textfilterInstruments = wx.TextCtrl(panel)
 		self.listSf = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))  
 		self.listInst = wx.ListBox(panel, choices=self.instruments, size=(-1,200))  
 
 		# start layout 
-		#font = wx.SystemSettings_GetFont(wx.SYS_SYSTEM_FONT)
-		#font.SetPointSize(9)
 		vbox = wx.BoxSizer(wx.VERTICAL)
 
 		# row1
@@ -269,7 +278,6 @@ class FluidSynthGui(wx.Frame):
 		row.Add(wx.StaticText(panel, label='Filter Fonts'),flag=wx.LEFT, border=10, proportion=1)
 		row.Add(self.textfilterSoundFont,proportion=4)
 		#row.Add(wx.StaticText(panel, label='filter *'),flag=wx.LEFT, border=10, proportion=1)
-		#row.Add(self.textfilterInstruments,proportion=4)
 
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
@@ -284,7 +292,6 @@ class FluidSynthGui(wx.Frame):
         	self.listInst.Bind(wx.EVT_LISTBOX, self.selectInstrument,self.listInst)
 
         	self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.keyUpFilterSoundFont,self.textfilterSoundFont)
-        	#self.textfilterInstruments.Bind(wx.wx.EVT_KEY_UP, self.keyUpfilterInstrumentsrument)
 
 
 		# pack
@@ -298,19 +305,16 @@ class FluidSynthGui(wx.Frame):
 		event.Skip()
 		keycode = event.GetKeyCode()
 		path = self.textSoundFontDir.GetValue()
-		#print path
 
 		if ( os.path.isdir(path) ):
 			self.dir = path
 			self.refreshSoundFonts()
-			#print "dir exists" 
 
 	# set self.dir
 	def clickButtonBrowse(self, event):
 		event.Skip()
 		dlg = wx.DirDialog(self, "Choose a directory:", style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
 		if dlg.ShowModal() == wx.ID_OK:
-			#self.SetStatusText('You selected: %s\n' % dlg.GetPath())
 			print 'selected: %s\n' % dlg.GetPath()
 			self.dir = dlg.GetPath()
 			self.textSoundFontDir.SetValue(self.dir)
@@ -329,26 +333,22 @@ class FluidSynthGui(wx.Frame):
 		self.instrumentsIdx = 0
 		self.refreshInstruments()
 
-	# sound font change
+	# sound soundfont change
 	def selectSoundFont(self, event):
 		idx = event.GetSelection()
 		event.Skip()
-		#print 'event idx: ' + str(idx)
 		if ( idx < 0 ):
 			return
 		sel = self.soundFonts[idx]
 		path = self.dir + '/' + sel
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
 		self.instrumentsAll = instrumentsAll
-		#self.fluidsynthActiveData = (id, instrumentsAll)	
 		self.instrumentsIdx = 0
 		self.refreshInstruments();
 		
 	def selectInstrument(self, event):
 		idx = self.listInst.GetSelection()
 		event.Skip()
-		#print "selecvted"
-		#print idx
 
 		# NOTE: idx is -1 when using the arrow keys
 		if ( idx < 0 ):
@@ -359,7 +359,6 @@ class FluidSynthGui(wx.Frame):
 	def keyDownSoundFont(self, event):
 		keycode = event.GetKeyCode()
 		event.Skip()
-		#print keycode
 		if keycode == wx.WXK_LEFT:
 			self.instrumentsIdx = self.incrementInst(self.instrumentsIdx,-1)
 			self.loadInstrument()
@@ -392,17 +391,12 @@ class FluidSynthGui(wx.Frame):
 
 	def filterInstruments(self):
 		return self.instrumentsAll;
-#		return self.grep(self.textfilterInstruments.GetValue(),self.instrumentsAll);
 
 	def refreshSoundFonts(self,cache=False):
 		if not cache:
 			self.soundFontsAll = os.listdir(self.dir)
-			#print "All files:" 
-			#print self.soundFontsAll
 
 		self.soundFonts = self.filterSoundFont()
-		#print "filtered list:" 
-		#print self.soundFonts
 		self.listSf.Set(self.soundFonts)
 
 		self.instrumentsIdx = 0;
@@ -419,7 +413,6 @@ class FluidSynthGui(wx.Frame):
 		idx = self.incrementInst( self.instrumentsIdx, 0 )
 		sel = self.instruments[idx]
 		print "- select " + str(idx) + " " + sel
-		#print "selected inst: " + sel 
 		self.fluidsynth.setProgram(sel)	
 
 
