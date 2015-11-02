@@ -13,11 +13,15 @@
 #     1. select a folder that contains *.sf2 files
 #     2. Up/Down arrows will cycle through the soundfont files
 #     3. Left/Right arrows will cycle through the instruments in each file
-#     4. You can filter the sound fonts with the filter (bottom) 
+#     4. You can filter the sound fonts listed (search box at bottom) 
+#     5. Optional: you can set the midi channel you want to use (default = 1) 
 #
 # Command line options:
-#     1. fluidsynth_cmd1 | fluidsynth_cmd2	
-#     2. path_to_sf2_dir
+#     1. cmd1|cmd2                pipe-delimited fluidsynth commands (can be "")
+#     2. path_to_sf2_dir          the default path to your sound fonds 
+#
+#     For example:
+#         python  fluidsynthgui.py  "gain 5"  /home/Music/Public/sf2/
 #
 # System Requirements
 #	jack/QjackCtl	
@@ -52,7 +56,7 @@ class FluidSynthApi:
 		# start fluidsynth process
 		print "Init fluidsynth..."
 		self.fluidsynth = subprocess.Popen(['fluidsynth'], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-		self.activeChannel = 0
+		self.activeChannel = 1 # base 1
 		self.activeSoundFont = -1
 		self.debug = True
 
@@ -184,9 +188,11 @@ class FluidSynthApi:
 		try:
 			parts = id.split()
 			ids = parts[0].split('-')			
+			chan=str(self.activeChannel-1) # base 0
+			font=str(self.activeSoundFont)
 			bank=ids[0]
 			prog=ids[1]
-			cmd = 'select '+str(self.activeChannel)+' '+str(self.activeSoundFont)+' '+bank+' '+prog
+			cmd = 'select '+chan+' '+font+' '+bank+' '+prog
 			data = self.cmd(cmd)
 			return data
 		except:
@@ -258,18 +264,18 @@ class FluidSynthGui(wx.Frame):
 			self.textSoundFontDir.SetValue(self.dir)
 			self.refreshSoundFonts()
 
-
 	def initUI(self):
 
 		# user interface 	
 
-		# ui vars 
+		# ui components 
 		panel = wx.Panel(self)
 		self.textSoundFontDir = wx.TextCtrl(panel)
 		self.btnSfDir = wx.Button(panel, label="Browse...")
 		self.textfilterSoundFont = wx.TextCtrl(panel)
-		self.listSf = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))  
-		self.listInst = wx.ListBox(panel, choices=self.instruments, size=(-1,200))  
+		self.listSf = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))
+		self.listInst = wx.ListBox(panel,choices=self.instruments,size=(-1,200))  
+		self.spinChannel = wx.SpinCtrl(panel,min=1,max=16,initial=1)
 
 		# start layout 
 		vbox = wx.BoxSizer(wx.VERTICAL)
@@ -295,25 +301,24 @@ class FluidSynthGui(wx.Frame):
 
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
-		# row3
+		# row4
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(wx.StaticText(panel, label='Filter Fonts'),flag=wx.LEFT, border=10, proportion=1)
-		row.Add(self.textfilterSoundFont,proportion=4)
+		row.Add(wx.StaticText(panel, label='Filter Fonts'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT, border=10, proportion=1)
+		row.Add(self.textfilterSoundFont,flag=wx.ALIGN_CENTER_VERTICAL,proportion=4)
+		row.Add(wx.StaticText(panel, label='Channel'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT, border=10, proportion=1)
+		row.Add(self.spinChannel,flag=wx.ALIGN_CENTER_VERTICAL,proportion=1)
 
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
 		# event binding
 
 		self.btnSfDir.Bind(wx.EVT_BUTTON, self.clickButtonBrowse, self.btnSfDir)
-        	self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.keyUpDirectory, self.textSoundFontDir)
-
-        	self.listSf.Bind(wx.EVT_LISTBOX, self.selectSoundFont, self.listSf)
-        	self.listSf.Bind(wx.wx.EVT_KEY_DOWN, self.keyDownSoundFont, self.listSf)
-
-        	self.listInst.Bind(wx.EVT_LISTBOX, self.selectInstrument,self.listInst)
-
-        	self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.keyUpFilterSoundFont,self.textfilterSoundFont)
-
+		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.keyUpDirectory, self.textSoundFontDir)
+		self.listSf.Bind(wx.EVT_LISTBOX, self.selectSoundFont, self.listSf)
+		self.listSf.Bind(wx.wx.EVT_KEY_DOWN, self.keyDownSoundFont, self.listSf)
+		self.listInst.Bind(wx.EVT_LISTBOX, self.selectInstrument,self.listInst)
+		self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.keyUpFilterSoundFont,self.textfilterSoundFont)
+		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.clickChannel,self.spinChannel)
 
 		# pack
 		panel.SetSizer(vbox)
@@ -343,16 +348,6 @@ class FluidSynthGui(wx.Frame):
 
 		dlg.Destroy()
 		
-
-	# filters
-	def keyUpFilterSoundFont(self,event):
-		event.Skip()
-		self.refreshSoundFonts(True)
-
-	def keyUpfilterInstrumentsrument(self,event):
-		event.Skip()
-		self.instrumentsIdx = 0
-		self.refreshInstruments()
 
 	# sound soundfont change
 	def selectSoundFont(self, event):
@@ -398,6 +393,16 @@ class FluidSynthGui(wx.Frame):
 		if ( id >= size ):
 			id = size - 1
 		return id
+
+	# filters
+	def keyUpFilterSoundFont(self,event):
+		event.Skip()
+		self.refreshSoundFonts(True)
+
+	# channel
+	def clickChannel(self,event):
+		chan=self.spinChannel.GetValue()
+		self.fluidsynth.activeChannel = chan	
 
 	# api 
 	def grep(self, pattern, word_list):
