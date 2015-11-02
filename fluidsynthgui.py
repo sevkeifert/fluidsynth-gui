@@ -26,6 +26,16 @@
 #	python-wxgtk2.8+
 #
 # Tested with: xubuntu 14.04, FluidSynth version 1.1.6
+#
+# Expected Fluidsynth command definitions:
+#
+#   select chan font bank prog  Combination of bank-select and program-change
+#   quit                        Quit the synthesizer
+#   load file                   Load SoundFont 
+#   unload id                   Unload SoundFont by ID 
+#   fonts                       Display the list of loaded SoundFonts
+#   inst font                   Print out the available instruments for the font
+#   gain value                  Set the master gain (0 < gain < 5)
 
 import sys 
 import os 
@@ -42,6 +52,9 @@ class FluidSynthApi:
 		# start fluidsynth process
 		print "Init fluidsynth..."
 		self.fluidsynth = subprocess.Popen(['fluidsynth'], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+		self.activeChannel = 0
+		self.activeSoundFont = -1
+		self.debug = True
 
 	# execute command in fluidsynth and read output.
 	#
@@ -65,7 +78,6 @@ class FluidSynthApi:
 	def cmd(self, cmd, readtil='>'):
 
 		p=self.fluidsynth
-		print "- cmd: " + cmd
 
 		lines=''
 		p.stdin.write(cmd + "\n" )
@@ -82,7 +94,8 @@ class FluidSynthApi:
 					# drain \n padding 
 					for num in range(1,count):
 						p.stdout.readline()
-						
+					if self.debug:
+						print lines	
 					return lines
 			else:
 				lines = lines + "\n" + line
@@ -95,11 +108,14 @@ class FluidSynthApi:
 	#> 
 	def loadSoundFont(self, sf2):
 		try:
+
 			data = self.cmd('load "'+ sf2 +'"')
 			ids = [int(s) for s in data.split() if s.isdigit()]	
 			id = ids[-1] # return last item
+			self.activeSoundFont = id
 			return id
 		except:
+			print "error: did not complete loading font: " + sf2
 			return -1
 
 	# remove soundfont from memory, for example:
@@ -123,7 +139,7 @@ class FluidSynthApi:
 				ids_clean.append(id2)
 			return ids_clean
 		except:
-			print "no fonts parsed"
+			print "error: no fonts parsed"
 
 	# remove soundfont from memory, for example:
 	#
@@ -136,7 +152,7 @@ class FluidSynthApi:
 			for id in ids:
 				self.cmd('unload "'+ id +'"')
 		except:
-			print "could not unload fonts"
+			print "error: could not unload fonts"
 
 	# list instruments in soundfont, for example:
 	# 
@@ -150,6 +166,7 @@ class FluidSynthApi:
 			ids = data.splitlines()
 			return ids[2:] # discard first two items (header)
 		except:
+			print "error: could not get instruments"
 			return []
 
 	# change voice in soundfont
@@ -158,17 +175,23 @@ class FluidSynthApi:
 	#	000-000 Some Voice
 	#	000-000
 	#
+	#note: "prog bank prog" doesn't always seem to work as expected
+	#using 'select' instead
 	# for example:
-	#> prog 000 000
+	#select chan sfont bank prog
 	#> 
-	def setProgram(self,id):
+	def setInstrument(self,id):
 		try:
-			parts = id.split()			
+			parts = id.split()
 			ids = parts[0].split('-')			
-			data = self.cmd('prog '+ids[0]+' '+ids[1])
+			bank=ids[0]
+			prog=ids[1]
+			cmd = 'select '+str(self.activeChannel)+' '+str(self.activeSoundFont)+' '+bank+' '+prog
+			data = self.cmd(cmd)
 			return data
 		except:
-			return 'error'
+			print 'error: could not select instrument: ' + id
+			return '' 
 
 	# load soundfont, select first program voice
 	# returns (id,array_of_voices)
@@ -187,10 +210,10 @@ class FluidSynthApi:
 			self.unloadSoundFonts()
 			id = self.loadSoundFont(sf2)
 			voices = self.getInstruments(id)
-			self.setProgram(voices[0])
+			self.setInstrument(voices[0])
 			return (id,voices)
 		except:
-			print "Voice did not load: " + sf2
+			print "error: voice did not load: " + sf2
 
 		return (-1,[])
 
@@ -408,7 +431,7 @@ class FluidSynthGui(wx.Frame):
 		idx = self.incrementInst( self.instrumentsIdx, 0 )
 		sel = self.instruments[idx]
 		print "- select " + str(idx) + " " + sel
-		self.fluidsynth.setProgram(sel)	
+		self.fluidsynth.setInstrument(sel)	
 
 
 # main
