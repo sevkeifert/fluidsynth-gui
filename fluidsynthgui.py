@@ -56,8 +56,13 @@ class FluidSynthApi:
 		# start fluidsynth process
 		print "Init fluidsynth..."
 		self.fluidsynth = subprocess.Popen(['fluidsynth'], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+		# memory/font management
+		# we only can load 16 fonts on 16 channels.  unload the rest.
+		self.fontsInUse = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
 		self.activeChannel = 1 # base 1
 		self.activeSoundFont = -1
+
 		self.debug = True
 
 	# execute command in fluidsynth and read output.
@@ -139,13 +144,17 @@ class FluidSynthApi:
 				# example:
 				# '1 /home/user/sf2/Choir__Aahs_736KB.sf2'
 				parts = id.split()
-				id2=parts[0]	
-				ids_clean.append(id2)
+
+				try:
+					id2=int(parts[0])
+					ids_clean.append(id2)
+				except:
+					print "error: skip font parse: " + parts
 			return ids_clean
 		except:
 			print "error: no fonts parsed"
 
-	# remove soundfont from memory, for example:
+	# remove unused soundfonts from memory, for example:
 	#
 	#> unload 1
 	#fluidsynth: warning: No preset found on channel 0 [bank=0 prog=0]
@@ -153,8 +162,21 @@ class FluidSynthApi:
 	def unloadSoundFonts(self):
 		try:
 			ids = self.getSoundFonts()
+			## debug memory management
+			#if self.debug:
+			#	print "Fonts in use:"
+			#	print self.fontsInUse
+			#	print "All Fonts in memory:"
+			#	print ids 
+
+			## unload any soundfont that is not referenced
 			for id in ids:
-				self.cmd('unload "'+ id +'"')
+				sid=str(id)
+				if id in self.fontsInUse:
+					#print "font in use: " + sid
+					pass
+				else:
+					self.cmd('unload '+ sid )
 		except:
 			print "error: could not unload fonts"
 
@@ -164,7 +186,6 @@ class FluidSynthApi:
 	#000-000 Dark Violins  
 	#> 
 	def getInstruments(self,id):
-		
 		try:
 			data = self.cmd('inst ' + str(id))
 			ids = data.splitlines()
@@ -188,12 +209,15 @@ class FluidSynthApi:
 		try:
 			parts = id.split()
 			ids = parts[0].split('-')			
-			chan=str(self.activeChannel-1) # base 0
-			font=str(self.activeSoundFont)
-			bank=ids[0]
-			prog=ids[1]
+			chan = str(self.activeChannel-1) # base 0
+			font = str(self.activeSoundFont)
+			bank = ids[0]
+			prog = ids[1]
 			cmd = 'select '+chan+' '+font+' '+bank+' '+prog
 			data = self.cmd(cmd)
+
+			self.fontsInUse[int(chan)] = int(font)
+
 			return data
 		except:
 			print 'error: could not select instrument: ' + id
@@ -273,8 +297,8 @@ class FluidSynthGui(wx.Frame):
 		self.textSoundFontDir = wx.TextCtrl(panel)
 		self.btnSfDir = wx.Button(panel, label="Browse...")
 		self.textfilterSoundFont = wx.TextCtrl(panel)
-		self.listSf = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))
-		self.listInst = wx.ListBox(panel,choices=self.instruments,size=(-1,200))  
+		self.listSoundFont = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))
+		self.listInstruments = wx.ListBox(panel,choices=self.instruments,size=(-1,200))  
 		self.spinChannel = wx.SpinCtrl(panel,min=1,max=16,initial=1)
 
 		# start layout 
@@ -296,8 +320,8 @@ class FluidSynthGui(wx.Frame):
 
 		# row3
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(self.listSf,proportion=1)
-		row.Add(self.listInst,proportion=1)
+		row.Add(self.listSoundFont,proportion=1)
+		row.Add(self.listInstruments,proportion=1)
 
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
@@ -314,9 +338,9 @@ class FluidSynthGui(wx.Frame):
 
 		self.btnSfDir.Bind(wx.EVT_BUTTON, self.clickButtonBrowse, self.btnSfDir)
 		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.keyUpDirectory, self.textSoundFontDir)
-		self.listSf.Bind(wx.EVT_LISTBOX, self.selectSoundFont, self.listSf)
-		self.listSf.Bind(wx.wx.EVT_KEY_DOWN, self.keyDownSoundFont, self.listSf)
-		self.listInst.Bind(wx.EVT_LISTBOX, self.selectInstrument,self.listInst)
+		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.selectSoundFont, self.listSoundFont)
+		self.listSoundFont.Bind(wx.wx.EVT_KEY_DOWN, self.keyDownSoundFont, self.listSoundFont)
+		self.listInstruments.Bind(wx.EVT_LISTBOX, self.selectInstrument,self.listInstruments)
 		self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.keyUpFilterSoundFont,self.textfilterSoundFont)
 		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.clickChannel,self.spinChannel)
 
@@ -363,7 +387,7 @@ class FluidSynthGui(wx.Frame):
 		self.refreshInstruments();
 		
 	def selectInstrument(self, event):
-		idx = self.listInst.GetSelection()
+		idx = self.listInstruments.GetSelection()
 		event.Skip()
 
 		# NOTE: idx is -1 when using the arrow keys
@@ -376,16 +400,16 @@ class FluidSynthGui(wx.Frame):
 		keycode = event.GetKeyCode()
 		event.Skip()
 		if keycode == wx.WXK_LEFT:
-			self.instrumentsIdx = self.incrementInst(self.instrumentsIdx,-1)
+			self.instrumentsIdx = self.incInstrument(self.instrumentsIdx,-1)
 			self.loadInstrument()
 			self.refreshInstruments()
 		elif keycode == wx.WXK_RIGHT:
-			self.instrumentsIdx = self.incrementInst(self.instrumentsIdx,1)
+			self.instrumentsIdx = self.incInstrument(self.instrumentsIdx,1)
 			self.loadInstrument()
 			self.refreshInstruments()
 
 	# keep scrolling id in bounds
-	def incrementInst(self,id,add=0):
+	def incInstrument(self,id,add=0):
 		id+=add
 		if ( id < 0 ):
 			id = 0
@@ -421,7 +445,7 @@ class FluidSynthGui(wx.Frame):
 			self.soundFontsAll = os.listdir(self.dir)
 
 		self.soundFonts = self.filterSoundFont()
-		self.listSf.Set(self.soundFonts)
+		self.listSoundFont.Set(self.soundFonts)
 
 		self.instrumentsIdx = 0;
 		self.refreshInstruments();
@@ -429,11 +453,11 @@ class FluidSynthGui(wx.Frame):
 	# instrument
 	def refreshInstruments(self):
 		self.instruments = self.filterInstruments()
-		self.listInst.Set(self.instruments)
-		self.listInst.SetSelection(self.instrumentsIdx)
+		self.listInstruments.Set(self.instruments)
+		self.listInstruments.SetSelection(self.instrumentsIdx)
 
 	def loadInstrument(self):
-		idx = self.incrementInst( self.instrumentsIdx, 0 )
+		idx = self.incInstrument( self.instrumentsIdx, 0 )
 		sel = self.instruments[idx]
 		print "- select " + str(idx) + " " + sel
 		self.fluidsynth.setInstrument(sel)	
