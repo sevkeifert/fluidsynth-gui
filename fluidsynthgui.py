@@ -45,6 +45,8 @@ import sys
 import os 
 import wx
 import re
+import time
+import socket
 import subprocess
 
 
@@ -54,8 +56,7 @@ class FluidSynthApi:
 
 	def __init__(self):
 		# start fluidsynth process
-		print "Init fluidsynth..."
-		self.fluidsynth = subprocess.Popen(['fluidsynth'], shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+		print "Init fluidsynth api..."
 
 		# memory/font management
 		# we only can load 16 fonts on 16 channels.  unload the rest.
@@ -63,51 +64,171 @@ class FluidSynthApi:
 		self.activeChannel = 1 # base 1
 		self.activeSoundFont = -1
 
-		self.debug = True
+		# socket io settings
+		self.host='localhost'
+		self.port=9800
+		self.buffsize=4096
+		self.readtimeout=1 # sec
+		self.fluidsynth = None
+		self.fluidsynthcmd = "fluidsynth -sli -g5 -C0 -R0"
+		self.eof = "."
+		self.debug = True 
 
-	# execute command in fluidsynth and read output.
-	#
-	# NOTES: This is a very basic version of 'Expect'.
-	# For example if calling 
-	#	print fluidsynth.cmd("help")
-	# the function will read all output and stop at the next ">" prompt.
-	# The function expects the fluid synth prompt to look like ">".
-	#
-	# Python bug?!  Popen readlines() does not return data.
-	# And, Python doesn't support multiple Popen communicate() calls.
-	# There seems to be a race condition with pipes. 
-	# Overall, IMO subprocess is difficult to work with.
-	#
-	# Workaround: I'll poll input with "\n" write to prevent IO blocking 
-	# on single readline().  Then, I'll drain the output after I know 
-	# the total size of the text response.
-	#
-	# Other possible fixes: use pexpect, or fluidsynth python bindings
-	# but, this will make the script heavier with dependencies.
-	def cmd(self, cmd, readtil='>'):
+		# set up/test server
+		self.initFluidsynth()
 
-		p=self.fluidsynth
+	# test/initialize connection to fluidsynth
+	def initFluidsynth(self):
 
-		lines=''
-		p.stdin.write(cmd + "\n" )
-		count=0 # track \n padding
+		connected = False
+		try:
+			self.connect()
+			# looks good
+			connected = True
+		except Exception,e:
+			print "error: fluidsynth not running?"
+			print "could not connect to socket: " + str(self.port)
+			print "trying to starting fluidsynth"
 
-		while True:
-			count += 1
-			p.stdin.write("\n")
-			line = p.stdout.readline()
-			line = line.strip();
 
-			if line == readtil:
-				if lines != '':
-					# drain \n padding 
-					for num in range(1,count):
-						p.stdout.readline()
-					if self.debug:
-						print lines	
-					return lines
-			else:
-				lines = lines + "\n" + line
+		if not connected:
+			try:
+				# try starting fluidsynth
+				print "starting fluidsynth ..."
+				cmd = self.fluidsynthcmd.split()
+				self.fluidsynth = subprocess.Popen(cmd, shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+				connected = True	
+			except Exception,e:
+				print "error: fluidsynth could not start"
+				return
+
+		for i in range(1,3):	
+			try:
+				if not connected:
+					self.connect()
+					connected = True
+			except Exception,e:
+				print "error: could not connect to fluidsynth"
+				print "error: giving up"
+				time.sleep(1)
+
+		self.close()
+
+
+	# connect on every request (like HTTP)
+	# NOTE: you can only have one socket open at a time
+	def connect(self):
+
+		try:
+			self.close()
+		except:
+			pass
+
+		self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.clientsocket.connect((self.host,self.port))
+		self.clientsocket.settimeout(self.readtimeout)
+
+		print "connected"
+
+	# close sockets when finished
+
+	def close(self):
+		self.clientsocket.close()
+
+
+	# send data to fluidsynth socket
+	def send(self, packet):
+		if self.debug:
+			print "send: " + packet
+		self.clientsocket.send(packet)
+
+	# read data from fluidsynth socket
+	# these packets will be small
+	def read(self):
+		data = ""
+		try:
+			i=0
+			max_reads = 1000000 # avoid infinite loop
+			part = ""
+			while i<max_reads: 
+				i+=1
+				# inject EOF marker into output
+				self.send("echo " + self.eof + "\n")
+				part = self.clientsocket.recv(self.buffsize)
+				data += part
+				# print "chunk: " + part
+				# test data for boundary hit
+				# NOTE: part may only contain fragment of eof 
+				for eol in [ "\n", "\r\n", "\r" ]:
+					eof = eol + self.eof + eol
+					pos = data.find(eof)
+					if pos > -1: 
+						# found end of stream
+						# chop eof marker off
+						data = data[0:pos]
+						return data
+
+		except Exception, e:
+			print e
+
+		return data
+
+	# full request/response transaction
+	# nl not required
+	# returns data packet
+	def cmd(self, packet):
+		data = ""
+		self.connect()
+		self.send(packet+"\n")
+		data = self.read()
+		self.close()
+		return data
+
+
+	## DEPRECATED old command line io.  switch to socket IO
+	## execute command in fluidsynth and read output.
+	##
+	## NOTES: This is a very basic version of 'Expect'.
+	## For example if calling 
+	##	print fluidsynth.cmd("help")
+	## the function will read all output and stop at the next ">" prompt.
+	## The function expects the fluid synth prompt to look like ">".
+	##
+	## Python bug?!  Popen readlines() does not return data.
+	## And, Python doesn't support multiple Popen communicate() calls.
+	## There seems to be a race condition with pipes. 
+	## Overall, IMO subprocess is difficult to work with.
+	##
+	## Workaround: poll input with "\n" write to prevent IO blocking 
+	## on each single readline().  Then, drain the padded output after 
+	## the total size of the text response is known.
+	##
+	## Other possible fixes: use pexpect, or fluidsynth python bindings
+	## but, this will make the script heavier with dependencies.
+	#def cmd(self, cmd, readtil='>'):
+
+	#	p=self.fluidsynth
+
+	#	lines=''
+	#	p.stdin.write(cmd + "\n" )
+	#	count=0 # track \n padding
+
+	#	while True:
+	#		count += 1
+	#		p.stdin.write("\n")
+	#		line = p.stdout.readline()
+	#		line = line.strip();
+
+	#		if line == readtil:
+	#			if lines != '':
+	#				# drain \n padding 
+	#				for num in range(1,count):
+	#					p.stdout.readline()
+	#				if self.debug:
+	#					print lines	
+	#				return lines
+	#		else:
+	#			lines = lines + "\n" + line
 
 	# load sound soundfont, for example:
 	#
@@ -115,6 +236,7 @@ class FluidSynthApi:
 	#loaded SoundFont has ID 1
 	#fluidsynth: warning: No preset found on channel 9 [bank=128 prog=0]
 	#> 
+
 	def loadSoundFont(self, sf2):
 		try:
 
@@ -138,7 +260,7 @@ class FluidSynthApi:
 			data = self.cmd('fonts')
 			ids=data.splitlines()
 					
-			ids = ids[3:] # discard first 3 items (header)
+			#ids = ids[3:] # discard first 3 items (header)
 			ids_clean = []
 			for id in ids:
 				# example:
@@ -189,7 +311,8 @@ class FluidSynthApi:
 		try:
 			data = self.cmd('inst ' + str(id))
 			ids = data.splitlines()
-			return ids[2:] # discard first two items (header)
+			#ids = ids[2:] # discard first two items (header)
+			return ids
 		except:
 			print "error: could not get instruments"
 			return []
