@@ -87,44 +87,41 @@ class FluidSynthApi:
 	# push all messages to it
 	def initFluidsynth(self):
 
-		connected = False
 		try:
 			self.connect()
 			# looks good
-			connected = True
+			return True
 
 		except Exception,e:
 			print "error: fluidsynth not running?"
 			print "could not connect to socket: " + str(self.port)
-			print "trying to starting fluidsynth"
 			print e
 
-		if not connected:
-			try:
-				# try starting fluidsynth
-				print "starting fluidsynth ..."
-				cmd = self.fluidsynthcmd.split()
-				self.fluidsynth = subprocess.Popen(cmd, shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-				connected = True	
+		try:
+			# try starting fluidsynth
+			print "trying to start fluidsynth ..."
+			print self.fluidsynthcmd
+			cmd = self.fluidsynthcmd.split()
+			self.fluidsynth = subprocess.Popen(cmd, shell=False, 
+				stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
-			except Exception,e:
-				print "error: fluidsynth could not start"
-				print e
-				return
-
-		for i in range(1,3):	
-			try:
-				if not connected:
+			# process should be started, try connection again
+			for i in range(1,10):	
+				try:
 					self.connect()
-					connected = True
+					return True
 
-			except Exception,e:
-				print "error: could not connect to fluidsynth"
-				print "error: giving up"
-				print e
-				time.sleep(1)
+				except Exception,e:
+					print "retry ..."
+					print e
+					time.sleep(.5)
 
+		except Exception,e:
+			print "error: fluidsynth could not start"
+			print e
 
+		print "error: giving up"
+		return False
 	# cleanup
 	def closeFluidsynth(self):
 		self.close()
@@ -458,15 +455,9 @@ class FluidSynthGui(wx.Frame):
 	# 	soundfont dir
 	def args(self):
 
-		# init fluidsynth
-		if len(sys.argv) > 1:
-			cmds = sys.argv[1].split("|")
-			for cmd in cmds:	
-				print self.fluidsynth.cmd(cmd)
-
 		# init soundfonts dir
-		if len(sys.argv) > 2:
-			self.dir = sys.argv[2]
+		if len(sys.argv) > 1:
+			self.dir = sys.argv[1]
 			self.textSoundFontDir.SetValue(self.dir)
 			self.refreshSoundFonts()
 
@@ -662,8 +653,8 @@ class FluidSynthGui(wx.Frame):
 
 if __name__ == '__main__':
   
-	app = wx.App()
 	fluidsynth = FluidSynthApi()
+	app = wx.App()
 	FluidSynthGui(None, title='Fluid Synth Gui',api=fluidsynth)
 	app.MainLoop()
 
