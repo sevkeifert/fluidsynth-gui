@@ -621,7 +621,7 @@ class FluidSynthGui(wx.Frame):
 	# api 
 	def grep(self, pattern, word_list):
 	    expr = re.compile(pattern, re.IGNORECASE)
-	    return [elem for elem in word_list if expr.match(elem)]
+	    return [elem for elem in word_list if expr.search(elem)]
 
 
 	def filterSoundFont(self):
