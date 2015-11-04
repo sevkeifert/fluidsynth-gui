@@ -68,7 +68,7 @@ class FluidSynthApi:
 		self.host='localhost'
 		self.port=9800
 		self.buffsize=4096
-		self.readtimeout=1 # sec
+		self.readtimeout=2 # sec
 		self.fluidsynth = None
 		self.fluidsynthcmd = "fluidsynth -sli -g5 -C0 -R0"
 		self.eof = "."
@@ -77,7 +77,14 @@ class FluidSynthApi:
 		# set up/test server
 		self.initFluidsynth()
 
+
+	def __del__(self):
+		self.closeFluidsynth()
+
+
 	# test/initialize connection to fluidsynth
+	# NOTE: fluidsynth only supports one socket connection
+	# push all messages to it
 	def initFluidsynth(self):
 
 		connected = False
@@ -85,11 +92,12 @@ class FluidSynthApi:
 			self.connect()
 			# looks good
 			connected = True
+
 		except Exception,e:
 			print "error: fluidsynth not running?"
 			print "could not connect to socket: " + str(self.port)
 			print "trying to starting fluidsynth"
-
+			print e
 
 		if not connected:
 			try:
@@ -98,8 +106,10 @@ class FluidSynthApi:
 				cmd = self.fluidsynthcmd.split()
 				self.fluidsynth = subprocess.Popen(cmd, shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 				connected = True	
+
 			except Exception,e:
 				print "error: fluidsynth could not start"
+				print e
 				return
 
 		for i in range(1,3):	
@@ -107,33 +117,36 @@ class FluidSynthApi:
 				if not connected:
 					self.connect()
 					connected = True
+
 			except Exception,e:
 				print "error: could not connect to fluidsynth"
 				print "error: giving up"
+				print e
 				time.sleep(1)
 
+
+	# cleanup
+	def closeFluidsynth(self):
 		self.close()
 
 
-	# connect on every request (like HTTP)
-	# NOTE: you can only have one socket open at a time
+	# create socket connection
+	# do NOT connect on every request (like HTTP)
+	# fluidsynth seems to only be able to spawn a small number of total sockets 
 	def connect(self):
-
-		try:
-			self.close()
-		except:
-			pass
 
 		self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.clientsocket.connect((self.host,self.port))
 		self.clientsocket.settimeout(self.readtimeout)
-
 		print "connected"
 
-	# close sockets when finished
 
+	# cleanup sockets when finished
 	def close(self):
+
+		self.clientsocket.shutdown(socket.SHUT_RDWR)
 		self.clientsocket.close()
+		print "closed"
 
 
 	# send data to fluidsynth socket
@@ -142,10 +155,14 @@ class FluidSynthApi:
 			print "send: " + packet
 		self.clientsocket.send(packet)
 
+
 	# read data from fluidsynth socket
 	# these packets will be small
 	def read(self):
 		data = ""
+		# add blank line and eof marker, to tag the end of the stream
+		self.send("echo \"\"\n")
+		self.send("echo " + self.eof + "\n")
 		try:
 			i=0
 			max_reads = 1000000 # avoid infinite loop
@@ -153,14 +170,14 @@ class FluidSynthApi:
 			while i<max_reads: 
 				i+=1
 				# inject EOF marker into output
-				self.send("echo " + self.eof + "\n")
 				part = self.clientsocket.recv(self.buffsize)
 				data += part
-				# print "chunk: " + part
+				#print "chunk: " + part
 				# test data for boundary hit
 				# NOTE: part may only contain fragment of eof 
-				for eol in [ "\n", "\r\n", "\r" ]:
-					eof = eol + self.eof + eol
+				#for eol in [ "\n", "\r\n", "\r" ]:
+				for eol in [ "\n" ]:
+					eof = eol + self.eof + eol 
 					pos = data.find(eof)
 					if pos > -1: 
 						# found end of stream
@@ -169,26 +186,30 @@ class FluidSynthApi:
 						return data
 
 		except Exception, e:
+			print "warn: eof not found in stream. '"+self.eof+"'" 
 			print e
 
 		return data
+
 
 	# full request/response transaction
 	# nl not required
 	# returns data packet
 	def cmd(self, packet):
 		data = ""
-		self.connect()
+		#self.connect()
 		self.send(packet+"\n")
 		data = self.read()
-		self.close()
+		#self.close()
 		return data
 
 
-	## DEPRECATED old command line io.  switch to socket IO
-	## execute command in fluidsynth and read output.
+	## DEPRECATED - left in as fallback option
+	## This is the old command line IO.  This was switched to socket IO.
+	## This executes the command in a basic fluidsynth cli 
+	## and then reads and parses output from STDOUT pipe.
 	##
-	## NOTES: This is a very basic version of 'Expect'.
+	## NOTE: This is a very basic version of 'Expect'.
 	## For example if calling 
 	##	print fluidsynth.cmd("help")
 	## the function will read all output and stop at the next ">" prompt.
@@ -203,22 +224,22 @@ class FluidSynthApi:
 	## on each single readline().  Then, drain the padded output after 
 	## the total size of the text response is known.
 	##
+	## The best fix probably is to use the fluidsynth socket interface.
+	## The only difference between CLI and socket, is CLI uses a > prompt.
+	##
 	## Other possible fixes: use pexpect, or fluidsynth python bindings
 	## but, this will make the script heavier with dependencies.
+	##
 	#def cmd(self, cmd, readtil='>'):
-
 	#	p=self.fluidsynth
-
 	#	lines=''
 	#	p.stdin.write(cmd + "\n" )
 	#	count=0 # track \n padding
-
 	#	while True:
 	#		count += 1
 	#		p.stdin.write("\n")
 	#		line = p.stdout.readline()
 	#		line = line.strip();
-
 	#		if line == readtil:
 	#			if lines != '':
 	#				# drain \n padding 
@@ -230,24 +251,29 @@ class FluidSynthApi:
 	#		else:
 	#			lines = lines + "\n" + line
 
+
 	# load sound soundfont, for example:
 	#
 	#> load "/home/Music/sf2/Brass 4.SF2"
 	#loaded SoundFont has ID 1
 	#fluidsynth: warning: No preset found on channel 9 [bank=128 prog=0]
 	#> 
-
 	def loadSoundFont(self, sf2):
 		try:
-
 			data = self.cmd('load "'+ sf2 +'"')
 			ids = [int(s) for s in data.split() if s.isdigit()]	
 			id = ids[-1] # return last item
-			self.activeSoundFont = id
-			return id
-		except:
-			print "error: did not complete loading font: " + sf2
-			return -1
+			id = int(id)
+			if id > -1:
+				self.activeSoundFont = id
+				return id
+
+		except Exception,e:
+			print "error: could not load font: " + sf2
+			print e	
+
+		return -1
+
 
 	# remove soundfont from memory, for example:
 	#
@@ -270,12 +296,21 @@ class FluidSynthApi:
 				try:
 					id2=int(parts[0])
 					ids_clean.append(id2)
-				except:
-					print "error: skip font parse: " + parts
-			return ids_clean
-		except:
-			print "error: no fonts parsed"
 
+				except Exception,e:
+					print "error: skippint font parse: " 
+					print parts
+					print e 
+
+			return ids_clean
+
+		except Exception,e:
+			print "error: no fonts parsed"
+			print e
+
+		return []
+
+ 
 	# remove unused soundfonts from memory, for example:
 	#
 	#> unload 1
@@ -299,8 +334,10 @@ class FluidSynthApi:
 					pass
 				else:
 					self.cmd('unload '+ sid )
-		except:
+		except Exception,e:
 			print "error: could not unload fonts"
+			print e
+
 
 	# list instruments in soundfont, for example:
 	# 
@@ -308,14 +345,23 @@ class FluidSynthApi:
 	#000-000 Dark Violins  
 	#> 
 	def getInstruments(self,id):
+
+		id = int(id)
+		if id < 0:
+			return []
+
 		try:
 			data = self.cmd('inst ' + str(id))
 			ids = data.splitlines()
 			#ids = ids[2:] # discard first two items (header)
 			return ids
-		except:
+
+		except Exception,e:
 			print "error: could not get instruments"
-			return []
+			print e
+
+		return []
+
 
 	# change voice in soundfont
 	#
@@ -329,6 +375,13 @@ class FluidSynthApi:
 	#select chan sfont bank prog
 	#> 
 	def setInstrument(self,id):
+
+		if id == '':
+			return ''
+
+		if self.activeSoundFont < 0:
+			return ''
+
 		try:
 			parts = id.split()
 			ids = parts[0].split('-')			
@@ -342,9 +395,13 @@ class FluidSynthApi:
 			self.fontsInUse[int(chan)] = int(font)
 
 			return data
-		except:
+
+		except Exception,e:
 			print 'error: could not select instrument: ' + id
-			return '' 
+			print e
+
+		return '' 
+
 
 	# load soundfont, select first program voice
 	# returns (id,array_of_voices)
@@ -365,8 +422,10 @@ class FluidSynthApi:
 			voices = self.getInstruments(id)
 			self.setInstrument(voices[0])
 			return (id,voices)
-		except:
+
+		except Exception,e:
 			print "error: voice did not load: " + sf2
+			print e
 
 		return (-1,[])
 
@@ -410,6 +469,7 @@ class FluidSynthGui(wx.Frame):
 			self.dir = sys.argv[2]
 			self.textSoundFontDir.SetValue(self.dir)
 			self.refreshSoundFonts()
+
 
 	def initUI(self):
 
@@ -483,6 +543,7 @@ class FluidSynthGui(wx.Frame):
 			self.dir = path
 			self.refreshSoundFonts()
 
+
 	# set self.dir
 	def clickButtonBrowse(self, event):
 		event.Skip()
@@ -494,7 +555,7 @@ class FluidSynthGui(wx.Frame):
 			self.refreshSoundFonts()
 
 		dlg.Destroy()
-		
+
 
 	# sound soundfont change
 	def selectSoundFont(self, event):
@@ -509,6 +570,7 @@ class FluidSynthGui(wx.Frame):
 		self.instrumentsIdx = 0
 		self.refreshInstruments();
 		
+
 	def selectInstrument(self, event):
 		idx = self.listInstruments.GetSelection()
 		event.Skip()
@@ -518,6 +580,7 @@ class FluidSynthGui(wx.Frame):
 			return
 		self.instrumentsIdx = int(idx)
 		self.loadInstrument()
+
 
 	def keyDownSoundFont(self, event):
 		keycode = event.GetKeyCode()
@@ -531,6 +594,7 @@ class FluidSynthGui(wx.Frame):
 			self.loadInstrument()
 			self.refreshInstruments()
 
+
 	# keep scrolling id in bounds
 	def incInstrument(self,id,add=0):
 		id+=add
@@ -541,27 +605,33 @@ class FluidSynthGui(wx.Frame):
 			id = size - 1
 		return id
 
+
 	# filters
 	def keyUpFilterSoundFont(self,event):
 		event.Skip()
 		self.refreshSoundFonts(True)
+
 
 	# channel
 	def clickChannel(self,event):
 		chan=self.spinChannel.GetValue()
 		self.fluidsynth.activeChannel = chan	
 
+
 	# api 
 	def grep(self, pattern, word_list):
 	    expr = re.compile(pattern, re.IGNORECASE)
 	    return [elem for elem in word_list if expr.match(elem)]
 
+
 	def filterSoundFont(self):
 		lst = self.grep(self.textfilterSoundFont.GetValue(),self.soundFontsAll);
 		return sorted(lst, key=lambda s: s.lower())
 
+
 	def filterInstruments(self):
 		return self.instrumentsAll;
+
 
 	def refreshSoundFonts(self,cache=False):
 		if not cache:
@@ -573,11 +643,13 @@ class FluidSynthGui(wx.Frame):
 		self.instrumentsIdx = 0;
 		self.refreshInstruments();
 
+
 	# instrument
 	def refreshInstruments(self):
 		self.instruments = self.filterInstruments()
 		self.listInstruments.Set(self.instruments)
 		self.listInstruments.SetSelection(self.instrumentsIdx)
+
 
 	def loadInstrument(self):
 		idx = self.incInstrument( self.instrumentsIdx, 0 )
