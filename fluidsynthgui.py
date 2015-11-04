@@ -148,6 +148,8 @@ class FluidSynthApi:
 
 		print "error: giving up"
 		return False
+
+
 	# cleanup
 	def closeFluidsynth(self):
 		self.close()
@@ -487,9 +489,8 @@ class FluidSynthGui(wx.Frame):
 			self.refreshSoundFonts()
 
 
+	# create user interface 	
 	def initUI(self):
-
-		# user interface 	
 
 		# ui components 
 		panel = wx.Panel(self)
@@ -535,22 +536,22 @@ class FluidSynthGui(wx.Frame):
 
 		# event binding
 
-		self.btnSfDir.Bind(wx.EVT_BUTTON, self.clickButtonBrowse, self.btnSfDir)
-		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.keyUpDirectory, self.textSoundFontDir)
-		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.selectSoundFont, self.listSoundFont)
-		self.listSoundFont.Bind(wx.wx.EVT_KEY_DOWN, self.keyDownSoundFont, self.listSoundFont)
-		self.listInstruments.Bind(wx.EVT_LISTBOX, self.selectInstrument,self.listInstruments)
-		self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.keyUpFilterSoundFont,self.textfilterSoundFont)
-		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.clickChannel,self.spinChannel)
+		self.btnSfDir.Bind(wx.EVT_BUTTON, self.onClickButtonBrowse, self.btnSfDir)
+		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpDirectory, self.textSoundFontDir)
+		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.onSelectSoundFont, self.listSoundFont)
+		self.listSoundFont.Bind(wx.wx.EVT_KEY_DOWN, self.onKeyDownSoundFont, self.listSoundFont)
+		self.listInstruments.Bind(wx.EVT_LISTBOX, self.onSelectInstrument,self.listInstruments)
+		self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpFilterSoundFont,self.textfilterSoundFont)
+		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.onClickChannel,self.spinChannel)
 
 		# pack
 		panel.SetSizer(vbox)
 
 
-	# event handlers
+	# define event handlers...
 
 	# dir
-	def keyUpDirectory(self, event):
+	def onKeyUpDirectory(self, event):
 		event.Skip()
 		keycode = event.GetKeyCode()
 		path = self.textSoundFontDir.GetValue()
@@ -561,7 +562,7 @@ class FluidSynthGui(wx.Frame):
 
 
 	# set self.dir
-	def clickButtonBrowse(self, event):
+	def onClickButtonBrowse(self, event):
 		event.Skip()
 		dlg = wx.DirDialog(self, "Choose a directory:", style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
 		if dlg.ShowModal() == wx.ID_OK:
@@ -574,7 +575,7 @@ class FluidSynthGui(wx.Frame):
 
 
 	# sound soundfont change
-	def selectSoundFont(self, event):
+	def onSelectSoundFont(self, event):
 		idx = event.GetSelection()
 		event.Skip()
 		if ( idx < 0 ):
@@ -587,7 +588,7 @@ class FluidSynthGui(wx.Frame):
 		self.refreshInstruments();
 		
 
-	def selectInstrument(self, event):
+	def onSelectInstrument(self, event):
 		idx = self.listInstruments.GetSelection()
 		event.Skip()
 
@@ -598,7 +599,7 @@ class FluidSynthGui(wx.Frame):
 		self.loadInstrument()
 
 
-	def keyDownSoundFont(self, event):
+	def onKeyDownSoundFont(self, event):
 		keycode = event.GetKeyCode()
 		event.Skip()
 		if keycode == wx.WXK_LEFT:
@@ -611,6 +612,20 @@ class FluidSynthGui(wx.Frame):
 			self.refreshInstruments()
 
 
+	# filters
+	def onKeyUpFilterSoundFont(self,event):
+		event.Skip()
+		self.refreshSoundFonts(True)
+
+
+	# channel
+	def onClickChannel(self,event):
+		chan=self.spinChannel.GetValue()
+		self.fluidsynth.activeChannel = chan	
+
+
+	# api ...
+
 	# keep scrolling id in bounds
 	def incInstrument(self,id,add=0):
 		id+=add
@@ -621,20 +636,7 @@ class FluidSynthGui(wx.Frame):
 			id = size - 1
 		return id
 
-
-	# filters
-	def keyUpFilterSoundFont(self,event):
-		event.Skip()
-		self.refreshSoundFonts(True)
-
-
-	# channel
-	def clickChannel(self,event):
-		chan=self.spinChannel.GetValue()
-		self.fluidsynth.activeChannel = chan	
-
-
-	# api 
+	# search 
 	def grep(self, pattern, word_list):
 	    expr = re.compile(pattern, re.IGNORECASE)
 	    return [elem for elem in word_list if expr.search(elem)]
@@ -648,7 +650,15 @@ class FluidSynthGui(wx.Frame):
 	def filterInstruments(self):
 		return self.instrumentsAll;
 
+	def loadInstrument(self):
+		idx = self.incInstrument( self.instrumentsIdx, 0 )
+		sel = self.instruments[idx]
+		#print "- select " + str(idx) + " " + sel
+		self.fluidsynth.setInstrument(sel)	
 
+	# view...
+	
+	# draw soundfonts 
 	def refreshSoundFonts(self,cache=False):
 		if not cache:
 			self.soundFontsAll = os.listdir(self.dir)
@@ -660,19 +670,11 @@ class FluidSynthGui(wx.Frame):
 		self.refreshInstruments();
 
 
-	# instrument
+	# draw instruments
 	def refreshInstruments(self):
 		self.instruments = self.filterInstruments()
 		self.listInstruments.Set(self.instruments)
 		self.listInstruments.SetSelection(self.instrumentsIdx)
-
-
-	def loadInstrument(self):
-		idx = self.incInstrument( self.instrumentsIdx, 0 )
-		sel = self.instruments[idx]
-		print "- select " + str(idx) + " " + sel
-		self.fluidsynth.setInstrument(sel)	
-
 
 # main
 
