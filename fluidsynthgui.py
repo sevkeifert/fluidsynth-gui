@@ -153,7 +153,10 @@ class FluidSynthApi:
 	# cleanup
 	def closeFluidsynth(self):
 		self.close()
-
+		try:
+			self.fluidsynth.kill()
+		except:
+			print "fluidsynth will be left running"			
 
 	# create socket connection
 	# do NOT connect on every request (like HTTP)
