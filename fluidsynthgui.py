@@ -2,12 +2,14 @@
 #
 # Kevin Seifert - GPL 2005
 #
+#
 # This program creates a simple synthesizer interface for fluidsynth.
 # This lets you easily cycle through a large set of sound fonts
 # and select instruments.
 #
 # This program just runs the fluidsynth command line program, sending 
 # input, and parsing output.  
+#
 #
 # How to use:
 #     1. select a folder that contains *.sf2 files
@@ -16,30 +18,40 @@
 #     4. You can filter the sound fonts listed (search box at bottom) 
 #     5. Optional: you can set the midi channel you want to use (default = 1) 
 #
+#
 # Command line options:
-#     1. cmd1|cmd2                pipe-delimited fluidsynth commands (can be "")
-#     2. path_to_sf2_dir          the default path to your sound fonds 
 #
-#     For example:
-#         python  fluidsynthgui.py  "gain 5"  /home/Music/Public/sf2/
+#    	-d sf2_dir                  the default path to your sound fonds 
+#    	-f fluidsynth_command       override the start command 
+#	any additional args 	    executed as commands in fluidsynth
 #
-# System Requirements
-#	jack/QjackCtl	
+#   For example:
+#
+#         python  fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
+#
+# To connect a CLI to a runninng fluidsynth process, you can use netcat:
+#
+#	nc localhost 9800
+#
+#
+# System Requirements:
+#	jack (QjackCtl recommended)
 #	fluidsynth (you should configure for command line first)
 #	Python 2.7+
 #	python-wxgtk2.8+
 #
 # Tested with: xubuntu 14.04, FluidSynth version 1.1.6
 #
-# Expected Fluidsynth command definitions:
 #
-#   select chan font bank prog  Combination of bank-select and program-change
-#   quit                        Quit the synthesizer
+# Fluidsynth commands definitions used:
+#
+#   echo                        Echo data back 
 #   load file                   Load SoundFont 
 #   unload id                   Unload SoundFont by ID 
 #   fonts                       Display the list of loaded SoundFonts
 #   inst font                   Print out the available instruments for the font
-#   gain value                  Set the master gain (0 < gain < 5)
+#   select chan font bank prog  Combination of bank-select and program-change
+
 
 import sys 
 import os 
@@ -48,15 +60,20 @@ import re
 import time
 import socket
 import subprocess
+import optparse
 
 
 # API
 # this api just writes/reads data to/from the command line interface
 class FluidSynthApi:
 
-	def __init__(self):
+	def __init__(self,options,args):
 		# start fluidsynth process
 		print "Init fluidsynth api..."
+
+		# cli
+		self.options = options
+		self.args = args
 
 		# memory/font management
 		# we only can load 16 fonts on 16 channels.  unload the rest.
@@ -74,8 +91,17 @@ class FluidSynthApi:
 		self.eof = "."
 		self.debug = True 
 
+		# cli option overrides
+		if ( options.fluidsynthcmd != "" ):
+			self.fluidsynthcmd = options.fluidsynthcmd
+
 		# set up/test server
 		self.initFluidsynth()
+
+		# process command line args passed to fluid synth
+		if len(self.args) > 0:
+			for arg in args:
+				self.cmd(arg)
 
 
 	def __del__(self):
@@ -183,7 +209,7 @@ class FluidSynthApi:
 						return data
 
 		except Exception, e:
-			print "warn: eof not found in stream. '"+self.eof+"'" 
+			print "warn: eof not found in stream: '"+self.eof+"'" 
 			print e
 
 		return data
@@ -291,11 +317,12 @@ class FluidSynthApi:
 				parts = id.split()
 
 				try:
-					id2=int(parts[0])
-					ids_clean.append(id2)
+					if parts[0] != 'ID':
+						id2=int(parts[0])
+						ids_clean.append(id2)
 
 				except Exception,e:
-					print "error: skippint font parse: " 
+					print "warn: skipping font parse: " 
 					print parts
 					print e 
 
@@ -451,13 +478,11 @@ class FluidSynthGui(wx.Frame):
 
 
 	# command line args
-	#	cmd1 | cmd2 cmd3
 	# 	soundfont dir
 	def args(self):
-
-		# init soundfonts dir
-		if len(sys.argv) > 1:
-			self.dir = sys.argv[1]
+		options = self.fluidsynth.options
+		if options.dir != "":
+			self.dir = options.dir
 			self.textSoundFontDir.SetValue(self.dir)
 			self.refreshSoundFonts()
 
@@ -652,8 +677,19 @@ class FluidSynthGui(wx.Frame):
 # main
 
 if __name__ == '__main__':
-  
-	fluidsynth = FluidSynthApi()
+
+	# parse cli options 
+	parser = optparse.OptionParser()
+	parser.add_option('-d', '--dir', action="store", dest="dir",
+		help="load a sf2 directory", default="") 
+	parser.add_option('-c', '--cmd', action="store", dest="fluidsynthcmd", 
+		help="use a custom command to start fluidsynth server", default="") 
+	options, args = parser.parse_args()
+
+	# init api
+	fluidsynth = FluidSynthApi(options,args)
+
+	# wrap api with gui
 	app = wx.App()
 	FluidSynthGui(None, title='Fluid Synth Gui',api=fluidsynth)
 	app.MainLoop()
