@@ -11,27 +11,29 @@
 # input, and parsing output.  
 #
 #
-# How to use:
+# How to use the graphical user interface:
 #     1. select a folder that contains *.sf2 files
 #     2. Up/Down arrows will cycle through the soundfont files
 #     3. Left/Right arrows will cycle through the instruments in each file
 #     4. You can filter the sound fonts listed (search box at bottom) 
 #     5. Optional: you can set the midi channel you want to use (default = 1) 
+#     6. Optional: on the second tab, you can set levels for gain, reverb, 
+#         and chorus.
 #
 #
 # Command line options:
 #
 #    	-d sf2_dir                  the default path to your sound fonds 
 #    	-f fluidsynth_command       override the start command 
-#	any additional args 	    executed as commands in fluidsynth
+#	    any additional args         are executed as commands in fluidsynth
 #
 #   For example:
 #
-#         python  fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
+#       python  fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
 #
 # To connect a CLI to a runninng fluidsynth process, you can use netcat:
 #
-#	nc localhost 9800
+#    nc localhost 9800
 #
 #
 # System Requirements:
@@ -53,10 +55,10 @@
 #   select chan font bank prog  Combination of bank-select and program-change
 #
 #
-# Classes below:
+# Classes defined below:
 #
-#	FluidSynthApi - this is the core api/application
-#	FluidSynthGui - this is the graphical interface, and wraps the api
+#	FluidSynthApi - this is the core api/application.
+#	FluidSynthGui - this is the graphical interface; it wraps the api.
 #
 
 import sys 
@@ -1100,10 +1102,6 @@ if __name__ == '__main__':
 
 	# init api
 	fluidsynth = FluidSynthApi(options,args)
-
-#  debug
-
-	print fluidsynth.getValue('synth.reverb.active')
 
 	# wrap api with gui
 	app = wx.App()
