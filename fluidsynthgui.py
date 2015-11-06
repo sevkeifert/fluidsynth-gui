@@ -111,7 +111,7 @@ class FluidSynthApi:
 		# process command line args passed to fluid synth
 		if len(self.args) > 0:
 			for arg in args:
-				self.cmd(arg)
+				self.cmd(arg,True)
 
 
 	def __del__(self):
@@ -221,24 +221,31 @@ class FluidSynthApi:
 						# found end of stream
 						# chop eof marker off
 						data = data[0:pos]
+						if self.debug:
+							print "data: " + data + "\n--\n"
 						return data
 
 		except Exception, e:
 			print "warn: eof not found in stream: '"+self.eof+"'" 
 			print e
 
+		if self.debug:
+			print "data (timeout): " + data + "\n--\n"
 		return data
 
 
 	# full request/response transaction
 	# nl not required
-	# returns data packet
-	def cmd(self, packet):
+	# returns data packet (only if blocking)
+	# returns True (only if non-blocking)
+	def cmd(self, packet, non_blocking = False):
 		data = ""
-		#self.connect()
 		self.send(packet+"\n")
+
+		if non_blocking:
+			return True
+
 		data = self.read()
-		#self.close()
 		return data
 
 
@@ -372,7 +379,7 @@ class FluidSynthApi:
 					#print "font in use: " + sid
 					pass
 				else:
-					self.cmd('unload '+ sid )
+					self.cmd('unload '+ sid, True)
 		except Exception,e:
 			print "error: could not unload fonts"
 			print e
@@ -429,7 +436,7 @@ class FluidSynthApi:
 			bank = ids[0]
 			prog = ids[1]
 			cmd = 'select '+chan+' '+font+' '+bank+' '+prog
-			data = self.cmd(cmd)
+			data = self.cmd(cmd, True)
 
 			self.fontsInUse[int(chan)] = int(font)
 
@@ -468,6 +475,72 @@ class FluidSynthApi:
 
 		return (-1,[])
 
+
+	# get/set config
+	def setValue(self,key,value):
+		value = self.cmd('set ' + key + ' ' + value, True)
+
+	def getValue(self,key):
+		value = self.cmd('get ' + key)
+		values = value.split() 
+		if len(values):
+			return values[-1]
+		else:
+			return '' 
+
+	def isTruthy(self,value):
+		if value in ["true","1","on","yes"]:
+			return True
+		return False
+
+	def getBoolValue(self,key):
+		value = self.getValue(key)
+		return self.isTruthy(value)
+
+	def getNumValue(self,key):
+		value = self.getValue(key)
+		value = float(value)
+		return value 
+
+	def getIntValue(self,key):
+		value = self.getValue(key)
+		value = int(value)
+		return value 
+
+	# gain api
+	#    gain value                Set the master gain (0 < gain < 5)
+	#    get synth.gain            5.000
+	def setGain(self,value):
+		self.cmd('gain ' + str(value),True) # [0,5]
+		self.setValue('synth.gain',str(float(value)*2)) # [0,10]
+
+	def getGain(self):
+		self.getNumValue('synth.gain') / 2
+
+	# reverb api
+	#    reverb [0|1|on|off]        Turn the reverb on or off
+	#    rev_setroomsize num        Change reverb room size. 0-1
+	#    rev_setdamp num            Change reverb damping. 0-1
+	#    rev_setwidth num           Change reverb width. 0-1
+	#    rev_setlevel num           Change reverb level. 0-1
+	def getReverb(self):
+		value = self.getBoolValue('synth.reverb.active')
+		return value 
+
+	def setReverb(self,boolean):
+		self.cmd('reverb ' + str(int(boolean)))
+		# ? not auto updated
+		self.cmd('set synth.reverb.active ' + str(int(boolean)), True) 
+	def setReverbRoomSize(self,num):
+		self.cmd('set rev_setroomsize ' + str(num), True)
+	def setReverbDamp(self,num):
+		self.cmd('set rev_setdamp ' + str(num), True)
+	def setReverbWidth(self,num):
+		self.cmd('set rev_setwidth ' + str(num), True)
+	def setReverbLevel(self,num):
+		self.cmd('set rev_setlevel ' + str(num), True)
+
+	# note: no getters for reverb details	
 
 
 # GUI
@@ -762,50 +835,59 @@ class FluidSynthGui(wx.Frame):
 		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.onClickChannel,self.spinChannel)
 
 		# levels 
-		self.sGain.Bind(wx.EVT_SCROLL,self.onScrollGain)
+		self.sGain.Bind(wx.EVT_SLIDER,self.onScrollGain)
 
 		self.cbEnableReverb.Bind(wx.EVT_CHECKBOX,self.onClickEnableReverb)
-		self.sReverbDamp.Bind(wx.EVT_SCROLL,self.onScrollReverbDamp)
-		self.sReverbRoomSize.Bind(wx.EVT_SCROLL,self.onScrollReverbRoomSize)
-		self.sReverbWidth.Bind(wx.EVT_SCROLL,self.onScrollReverbWidth)
-		self.sReverbLevel.Bind(wx.EVT_SCROLL,self.onScrollReverbLevel)
+		self.sReverbDamp.Bind(wx.EVT_SLIDER,self.onScrollReverbDamp)
+		self.sReverbRoomSize.Bind(wx.EVT_SLIDER,self.onScrollReverbRoomSize)
+		self.sReverbWidth.Bind(wx.EVT_SLIDER,self.onScrollReverbWidth)
+		self.sReverbLevel.Bind(wx.EVT_SLIDER,self.onScrollReverbLevel)
 
 		self.cbEnableChorus.Bind(wx.EVT_CHECKBOX,self.onClickEnableChorus)
-		self.sChorusN.Bind(wx.EVT_SCROLL,self.onScrollChorusN)
-		self.sChorusLevel.Bind(wx.EVT_SCROLL,self.onScrollChorusLevel)
-		self.sChorusSpeed.Bind(wx.EVT_SCROLL,self.onScrollChorusSpeed)
-		self.sChorusDepth.Bind(wx.EVT_SCROLL,self.onScrollChorusDepth)
+		self.sChorusN.Bind(wx.EVT_SLIDER,self.onScrollChorusN)
+		self.sChorusLevel.Bind(wx.EVT_SLIDER,self.onScrollChorusLevel)
+		self.sChorusSpeed.Bind(wx.EVT_SLIDER,self.onScrollChorusSpeed)
+		self.sChorusDepth.Bind(wx.EVT_SLIDER,self.onScrollChorusDepth)
 
 
 	# define event callbacks ...
 
 	# master gain	
 	def onScrollGain(self,event):
-		value = event.GetPosition()
-		print value
+		#value = event.GetPosition()
+		value = event.GetSelection()
+		value = value * 1/20.0 # 100 -> 5 
+		self.fluidsynth.setGain(value)
+		#print self.fluidsynth.getGain()
 
 	# reverb 
 	def onClickEnableReverb(self,event):
-		self.enableReverbControls(event.IsChecked())
+		value = event.IsChecked()
+		self.fluidsynth.setReverb(value)	
+		self.enableReverbControls(value)
+
+		print self.fluidsynth.getReverb()	
+
 
 #TODO: callback to synth
 #TODO: self.fluidsynth.enableReverb()
 #TODO: self.fluidsynth.setReverb(sReverbDamp.GetValue())
 
 	def onScrollReverbDamp(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
+
 	def onScrollReverbRoomSize(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
 	def onScrollReverbWidth(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
 	def onScrollReverbLevel(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
 
@@ -815,19 +897,19 @@ class FluidSynthGui(wx.Frame):
 # TODO: callback to synth
 
 	def onScrollChorusN(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
 	def onScrollChorusLevel(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
 	def onScrollChorusSpeed(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
 	def onScrollChorusDepth(self,event):
-		value = event.GetPosition()
+		value = event.GetSelection()
 		print value
 
 
@@ -905,6 +987,10 @@ class FluidSynthGui(wx.Frame):
 
 
 	# api ...
+
+	# proxy
+	def cmd(self,s,non_blocking=False):
+		return self.fluidsynth.cmd(s,non_blocking)	
 
 	# keep scrolling id in bounds
 	def incInstrument(self,id,add=0):
@@ -984,6 +1070,10 @@ if __name__ == '__main__':
 
 	# init api
 	fluidsynth = FluidSynthApi(options,args)
+
+#  debug
+
+	print fluidsynth.getValue('synth.reverb.active')
 
 	# wrap api with gui
 	app = wx.App()
