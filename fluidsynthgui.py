@@ -1,6 +1,6 @@
 #!/usr/bin/python
 #
-# Kevin Seifert - GPL 2005
+# Kevin Seifert - GPL 2015
 #
 #
 # This program creates a simple synthesizer interface for fluidsynth.
@@ -51,7 +51,13 @@
 #   fonts                       Display the list of loaded SoundFonts
 #   inst font                   Print out the available instruments for the font
 #   select chan font bank prog  Combination of bank-select and program-change
-
+#
+#
+# Classes below:
+#
+#	FluidSynthApi - this is the core api/application
+#	FluidSynthGui - this is the graphical interface, and wraps the api
+#
 
 import sys 
 import os 
@@ -77,7 +83,7 @@ class FluidSynthApi:
 
 		# memory/font management
 		# we only can load 16 fonts on 16 channels.  unload the rest.
-		self.fontsInUse = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
+		self.fontsInUse=[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
 		self.activeChannel = 1 # base 1
 		self.activeSoundFont = -1
 
@@ -86,9 +92,13 @@ class FluidSynthApi:
 		self.port=9800
 		self.buffsize=4096
 		self.readtimeout=2 # sec
-		self.fluidsynth = None
+		self.fluidsynth = None # the fluidsynth process
+
+		# see `man fluidsynth` for explanation of cli options
 		self.fluidsynthcmd = "fluidsynth -sli -g5 -C0 -R0"
-		self.eof = "."
+
+		# arbitrary text to mark the end of stream from fluidsynth
+		self.eof = "."  
 		self.debug = True 
 
 		# cli option overrides
@@ -132,7 +142,7 @@ class FluidSynthApi:
 				stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
 			# process should be started, try connection again
-			for i in range(1,10):	
+			for i in range(10):	
 				try:
 					self.connect()
 					return True
@@ -188,6 +198,7 @@ class FluidSynthApi:
 	# these packets will be small
 	def read(self):
 		data = ""
+		# inject EOF marker into output
 		# add blank line and eof marker, to tag the end of the stream
 		self.send("echo \"\"\n")
 		self.send("echo " + self.eof + "\n")
@@ -197,7 +208,6 @@ class FluidSynthApi:
 			part = ""
 			while i<max_reads: 
 				i+=1
-				# inject EOF marker into output
 				part = self.clientsocket.recv(self.buffsize)
 				data += part
 				#print "chunk: " + part
@@ -232,10 +242,11 @@ class FluidSynthApi:
 		return data
 
 
-	## DEPRECATED - left in as fallback option
-	## This is the old command line IO.  This was switched to socket IO.
-	## This executes the command in a basic fluidsynth cli 
+	## DEPRECATED - this works and is left in as fallback option.
+	## The old command line IO was switched to socket IO.
+	## This function just executes the command in a basic fluidsynth cli 
 	## and then reads and parses output from STDOUT pipe.
+	## The only difference between CLI and socket, is CLI uses a > prompt.
 	##
 	## NOTE: This is a very basic version of 'Expect'.
 	## For example if calling 
@@ -253,7 +264,6 @@ class FluidSynthApi:
 	## the total size of the text response is known.
 	##
 	## The best fix probably is to use the fluidsynth socket interface.
-	## The only difference between CLI and socket, is CLI uses a > prompt.
 	##
 	## Other possible fixes: use pexpect, or fluidsynth python bindings
 	## but, this will make the script heavier with dependencies.
@@ -271,7 +281,7 @@ class FluidSynthApi:
 	#		if line == readtil:
 	#			if lines != '':
 	#				# drain \n padding 
-	#				for num in range(1,count):
+	#				for num in range(count):
 	#					p.stdout.readline()
 	#				if self.debug:
 	#					print lines	
@@ -459,12 +469,14 @@ class FluidSynthApi:
 		return (-1,[])
 
 
+
 # GUI
 class FluidSynthGui(wx.Frame):
-  
+
 	def __init__(self, parent, title, api):
+
 		super(FluidSynthGui, self).__init__(parent, title=title, 
-			size=(640, 350))
+			size=(640, 480))
 		# data
 		self.fluidsynth = api 
 
@@ -476,33 +488,60 @@ class FluidSynthGui(wx.Frame):
 		self.instrumentsIdx = 0
 		self.soundFontsFilter = "" 
 	
+
+
 		self.initUI()		
-		self.args()
+		self.bindEvents()		
+		self.processArgs()
 		self.Centre()
 		self.Show() 
 
 
 	# command line args
-	# 	soundfont dir
-	def args(self):
+	def processArgs(self):
 		options = self.fluidsynth.options
+
 		if options.dir != "":
 			self.dir = options.dir
 			self.textSoundFontDir.SetValue(self.dir)
 			self.refreshSoundFonts()
 
 
-	# create user interface 	
 	def initUI(self):
 
-		# ui components 
-		panel = wx.Panel(self)
+		self.panel = wx.Panel(self)
+		panel = self.panel
+
+		self.notebook = wx.Notebook(panel)
+		page1 = wx.Panel(self.notebook)
+		page2 = wx.Panel(self.notebook)
+
+		self.createSoundFontControls(page2)
+		self.createLevelControls(page1)
+
+
+		self.notebook.AddPage(page1, "Sound Fonts")
+		self.notebook.AddPage(page2, "Effects")
+
+		sizer = wx.BoxSizer()
+		sizer.Add(self.notebook, 1, wx.EXPAND)
+		panel.SetSizer(sizer)
+		sizer.Fit(self)
+
+
+	# widgets for level controls (returns sizers) ... 
+
+
+	# this is the main widget for loading soundfonts
+	def createSoundFontControls(self,panel):
+
+		# ui components
 		self.textSoundFontDir = wx.TextCtrl(panel)
 		self.btnSfDir = wx.Button(panel, label="Browse...")
 		self.textfilterSoundFont = wx.TextCtrl(panel)
 		self.listSoundFont = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))
 		self.listInstruments = wx.ListBox(panel,choices=self.instruments,size=(-1,200))  
-		self.spinChannel = wx.SpinCtrl(panel,min=1,max=16,initial=1)
+		self.spinChannel = wx.SpinCtrl(panel,min=1,max=16,value="1")
 
 		# start layout 
 		vbox = wx.BoxSizer(wx.VERTICAL)
@@ -534,11 +573,186 @@ class FluidSynthGui(wx.Frame):
 		row.Add(self.textfilterSoundFont,flag=wx.ALIGN_CENTER_VERTICAL,proportion=4)
 		row.Add(wx.StaticText(panel, label='Channel'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT, border=10, proportion=1)
 		row.Add(self.spinChannel,flag=wx.ALIGN_CENTER_VERTICAL,proportion=1)
-
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
+
+		panel.SetSizer(vbox)
+		return vbox
+
+
+	# widget to control master gain level
+	# controls:
+	# gain value                 Set the master gain (0.0 < gain < 5.0)
+	def createGainControls(self,panel):
+
+		# ui components
+		slideStyle = wx.SL_VERTICAL|wx.SL_AUTOTICKS|wx.SL_LABELS|wx.SL_INVERSE
+
+		self.sGain=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+
+		boxlabel = "Gain" 
+		flags = wx.EXPAND|wx.ALL
+
+		box = wx.StaticBox(panel, -1, boxlabel)
+		sizer = wx.StaticBoxSizer(box, wx.HORIZONTAL)
+
+		sizer.Add(self.sGain,flag=flags, border=20)
+
+		return sizer
+
+
+	# widget to control reverb effects
+	# inset panel controls:
+	#reverb [0|1|on|off]        Turn the reverb on or off
+	#rev_setroomsize num        Change reverb room size. 0-1
+	#rev_setdamp num            Change reverb damping. 0-1
+	#rev_setwidth num           Change reverb width. 0-1
+	#rev_setlevel num           Change reverb level. 0-1
+	def createReverbControls(self,panel):
+
+		# ui components
+		slideStyle = wx.SL_HORIZONTAL|wx.SL_AUTOTICKS|wx.SL_LABELS 
+
+		self.cbEnableReverb = self.cb = wx.CheckBox(panel,-1,'Enabled')
+		self.sReverbRoomSize=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+		self.sReverbDamp=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+		self.sReverbWidth=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+		self.sReverbLevel=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+
+		self.enableReverbControls(False) # off by default
+
+		boxlabel= "Reverb"
+
+		flags = wx.ALIGN_CENTER_VERTICAL|wx.EXPAND|wx.ALL
+		sprop = 3 
+		box = wx.StaticBox(panel, -1, boxlabel)
+		sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
+
+		# row 1
+		row = wx.BoxSizer(wx.HORIZONTAL)
+
+		row.Add(self.cbEnableReverb,flag=flags,proportion=1)
+		sizer.Add(row, 0, wx.ALL, 2)
+
+		# row 2
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Room Size'),flag=flags, border=5, proportion=1)
+		row.Add(self.sReverbRoomSize,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		# row 3
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Damping'),flag=flags, border=5, proportion=1)
+		row.Add(self.sReverbDamp,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		# row 4
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Width'),flag=flags, border=5, proportion=1)
+		row.Add(self.sReverbWidth,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		# row 5
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Level'),flag=flags, border=5, proportion=1)
+		row.Add(self.sReverbLevel,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		return sizer
+
+
+	# widget to control chorus effects
+	# inset panel, sets values
+	# cho_set_nr n               Use n delay lines (default 3). 0-100
+	# cho_set_level num          Set output level of each chorus line to num. 0-1
+	# cho_set_speed num          Set mod speed of chorus to num (Hz). 25-500
+	# cho_set_depth num          Set chorus modulation depth to num (ms). 0-500
+	# chorus [0|1|on|off]        Turn the chorus on or off.
+	def createChorusControls(self,panel):
+		
+		# ui components
+		slideStyle = wx.SL_HORIZONTAL|wx.SL_AUTOTICKS|wx.SL_LABELS 
+
+		self.cbEnableChorus = self.cb = wx.CheckBox(panel,-1,'Enabled')
+		self.sChorusN=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+		self.sChorusLevel=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+		self.sChorusSpeed=wx.Slider(panel,-1,250,25,500,style=slideStyle) 
+		self.sChorusDepth=wx.Slider(panel,-1,250,0,500,style=slideStyle) 
+
+		self.enableChorusControls(False) # off by default
+
+		boxlabel= "Chorus"
+
+		flags = wx.ALIGN_CENTER_VERTICAL|wx.EXPAND|wx.ALL
+		sprop = 3 
+		box = wx.StaticBox(panel, -1, boxlabel)
+		sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
+
+
+		# row 1
+		row = wx.BoxSizer(wx.HORIZONTAL)
+
+		row.Add(self.cbEnableChorus,flag=flags,proportion=1)
+		sizer.Add(row, 0, wx.ALL, 2)
+
+		# row 2
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Room Size'),flag=flags, border=5, proportion=1)
+		row.Add(self.sChorusN,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		# row 3
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Damping'),flag=flags, border=5, proportion=1)
+		row.Add(self.sChorusLevel,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		# row 4
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Width'),flag=flags, border=5, proportion=1)
+		row.Add(self.sChorusSpeed,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		# row 5
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(wx.StaticText(panel, label='Level'),flag=flags, border=5, proportion=1)
+		row.Add(self.sChorusDepth,flag=flags, border=5, proportion=sprop)
+		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
+
+		return sizer
+
+
+	# widget to control sound effects
+	# gain + reverb + chorus panels
+	def createLevelControls(self,panel):
+
+		sbgain = self.createGainControls(panel)
+		sbreverb = self.createReverbControls(panel)
+		sbchorus = self.createChorusControls(panel)
+
+		# start layout
+		vbox = wx.BoxSizer(wx.VERTICAL)
+
+		# row 1
+		row = wx.BoxSizer(wx.HORIZONTAL)
+		row.Add(sbgain, 0, wx.EXPAND|wx.ALL)
+		row.Add(sbreverb, 0, wx.EXPAND|wx.ALL)
+		row.Add(sbchorus, 0, wx.EXPAND|wx.ALL)
+		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
+
+		panel.SetSizer(vbox)
+		#vbox.Fit(panel)
+		#panel.SetSizer(row)
+		#return row
+		return vbox
+
+
+	# wire up controls to callbacks
+	# this lists out all the controls and events
+	def bindEvents(self):
 
 		# event binding
 
+		# sound fonts
 		self.btnSfDir.Bind(wx.EVT_BUTTON, self.onClickButtonBrowse, self.btnSfDir)
 		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpDirectory, self.textSoundFontDir)
 		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.onSelectSoundFont, self.listSoundFont)
@@ -547,13 +761,77 @@ class FluidSynthGui(wx.Frame):
 		self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpFilterSoundFont,self.textfilterSoundFont)
 		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.onClickChannel,self.spinChannel)
 
-		# pack
-		panel.SetSizer(vbox)
+		# levels 
+		self.sGain.Bind(wx.EVT_SCROLL,self.onScrollGain)
+
+		self.cbEnableReverb.Bind(wx.EVT_CHECKBOX,self.onClickEnableReverb)
+		self.sReverbDamp.Bind(wx.EVT_SCROLL,self.onScrollReverbDamp)
+		self.sReverbRoomSize.Bind(wx.EVT_SCROLL,self.onScrollReverbRoomSize)
+		self.sReverbWidth.Bind(wx.EVT_SCROLL,self.onScrollReverbWidth)
+		self.sReverbLevel.Bind(wx.EVT_SCROLL,self.onScrollReverbLevel)
+
+		self.cbEnableChorus.Bind(wx.EVT_CHECKBOX,self.onClickEnableChorus)
+		self.sChorusN.Bind(wx.EVT_SCROLL,self.onScrollChorusN)
+		self.sChorusLevel.Bind(wx.EVT_SCROLL,self.onScrollChorusLevel)
+		self.sChorusSpeed.Bind(wx.EVT_SCROLL,self.onScrollChorusSpeed)
+		self.sChorusDepth.Bind(wx.EVT_SCROLL,self.onScrollChorusDepth)
 
 
-	# define event handlers...
+	# define event callbacks ...
 
-	# dir
+	# master gain	
+	def onScrollGain(self,event):
+		value = event.GetPosition()
+		print value
+
+	# reverb 
+	def onClickEnableReverb(self,event):
+		self.enableReverbControls(event.IsChecked())
+
+#TODO: callback to synth
+#TODO: self.fluidsynth.enableReverb()
+#TODO: self.fluidsynth.setReverb(sReverbDamp.GetValue())
+
+	def onScrollReverbDamp(self,event):
+		value = event.GetPosition()
+		print value
+
+	def onScrollReverbRoomSize(self,event):
+		value = event.GetPosition()
+		print value
+
+	def onScrollReverbWidth(self,event):
+		value = event.GetPosition()
+		print value
+
+	def onScrollReverbLevel(self,event):
+		value = event.GetPosition()
+		print value
+
+
+	# chorus
+	def onClickEnableChorus(self,event):
+		self.enableChorusControls(event.IsChecked())
+# TODO: callback to synth
+
+	def onScrollChorusN(self,event):
+		value = event.GetPosition()
+		print value
+
+	def onScrollChorusLevel(self,event):
+		value = event.GetPosition()
+		print value
+
+	def onScrollChorusSpeed(self,event):
+		value = event.GetPosition()
+		print value
+
+	def onScrollChorusDepth(self,event):
+		value = event.GetPosition()
+		print value
+
+
+	# dir change
 	def onKeyUpDirectory(self, event):
 		event.Skip()
 		keycode = event.GetKeyCode()
@@ -564,7 +842,6 @@ class FluidSynthGui(wx.Frame):
 			self.refreshSoundFonts()
 
 
-	# set self.dir
 	def onClickButtonBrowse(self, event):
 		event.Skip()
 		dlg = wx.DirDialog(self, "Choose a directory:", style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
@@ -641,8 +918,8 @@ class FluidSynthGui(wx.Frame):
 
 	# search 
 	def grep(self, pattern, word_list):
-	    expr = re.compile(pattern, re.IGNORECASE)
-	    return [elem for elem in word_list if expr.search(elem)]
+		expr = re.compile(pattern, re.IGNORECASE)
+		return [elem for elem in word_list if expr.search(elem)]
 
 
 	def filterSoundFont(self):
@@ -660,7 +937,21 @@ class FluidSynthGui(wx.Frame):
 		self.fluidsynth.setInstrument(sel)	
 
 	# view...
-	
+
+	# enable/disable fx widgets
+	def enableReverbControls(self,enabled):
+		self.sReverbRoomSize.Enable(enabled)
+		self.sReverbDamp.Enable(enabled)
+		self.sReverbWidth.Enable(enabled)
+		self.sReverbLevel.Enable(enabled)
+
+	# enable/disable fx widgets
+	def enableChorusControls(self,enabled):
+		self.sChorusN.Enable(enabled)
+		self.sChorusLevel.Enable(enabled)
+		self.sChorusSpeed.Enable(enabled)
+		self.sChorusDepth.Enable(enabled)
+
 	# draw soundfonts 
 	def refreshSoundFonts(self,cache=False):
 		if not cache:
@@ -679,8 +970,8 @@ class FluidSynthGui(wx.Frame):
 		self.listInstruments.Set(self.instruments)
 		self.listInstruments.SetSelection(self.instrumentsIdx)
 
-# main
 
+# main
 if __name__ == '__main__':
 
 	# parse cli options 
@@ -698,4 +989,5 @@ if __name__ == '__main__':
 	app = wx.App()
 	FluidSynthGui(None, title='Fluid Synth Gui',api=fluidsynth)
 	app.MainLoop()
+
 
