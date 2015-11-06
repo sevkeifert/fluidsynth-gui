@@ -242,6 +242,7 @@ class FluidSynthApi:
 		data = ""
 		self.send(packet+"\n")
 
+		#if non_blocking and not self.debug: #to disable nonblocking for debug  
 		if non_blocking:
 			return True
 
@@ -530,17 +531,43 @@ class FluidSynthApi:
 	def setReverb(self,boolean):
 		self.cmd('reverb ' + str(int(boolean)))
 		# ? not auto updated
-		self.cmd('set synth.reverb.active ' + str(int(boolean)), True) 
+		self.setValue('synth.reverb.active', str(int(boolean))) 
 	def setReverbRoomSize(self,num):
-		self.cmd('set rev_setroomsize ' + str(num), True)
+		self.cmd('rev_setroomsize ' + str(num), True)
 	def setReverbDamp(self,num):
-		self.cmd('set rev_setdamp ' + str(num), True)
+		self.cmd('rev_setdamp ' + str(num), True)
 	def setReverbWidth(self,num):
-		self.cmd('set rev_setwidth ' + str(num), True)
+		self.cmd('rev_setwidth ' + str(num), True)
 	def setReverbLevel(self,num):
-		self.cmd('set rev_setlevel ' + str(num), True)
+		self.cmd('rev_setlevel ' + str(num), True)
 
 	# note: no getters for reverb details	
+
+	# chorus api
+	#    cho_set_nr n               Use n delay lines (default 3)
+	#    cho_set_level num          Set output level of each chorus line to num
+	#    cho_set_speed num          Set mod speed of chorus to num (Hz)
+	#    cho_set_depth num          Set chorus modulation depth to num (ms)
+	#    chorus [0|1|on|off]        Turn the chorus on or off
+	def getChorus(self):
+		value = self.getBoolValue('synth.chorus.active')
+		return value 
+
+	def setChorus(self,boolean):
+		self.cmd('chorus ' + str(int(boolean)))
+		# ? not auto updated
+		self.setValue('synth.chorus.active', str(int(boolean))) 
+
+	def setChorusN(self,num):
+		self.cmd('cho_set_nr ' + str(num), True)
+	def setChorusLevel(self,num):
+		self.cmd('cho_set_level ' + str(num), True)
+	def setChorusSpeed(self,num):
+		self.cmd('cho_set_speed ' + str(num), True)
+	def setChorusDepth(self,num):
+		self.cmd('cho_set_depth ' + str(num), True)
+
+# end class
 
 
 # GUI
@@ -589,12 +616,11 @@ class FluidSynthGui(wx.Frame):
 		page1 = wx.Panel(self.notebook)
 		page2 = wx.Panel(self.notebook)
 
-		self.createSoundFontControls(page2)
-		self.createLevelControls(page1)
-
+		self.createSoundFontControls(page1)
+		self.createLevelControls(page2)
 
 		self.notebook.AddPage(page1, "Sound Fonts")
-		self.notebook.AddPage(page2, "Effects")
+		self.notebook.AddPage(page2, "Levels")
 
 		sizer = wx.BoxSizer()
 		sizer.Add(self.notebook, 1, wx.EXPAND)
@@ -708,13 +734,13 @@ class FluidSynthGui(wx.Frame):
 
 		# row 2
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(wx.StaticText(panel, label='Room Size'),flag=flags, border=5, proportion=1)
+		row.Add(wx.StaticText(panel, label='Room'),flag=flags, border=5, proportion=1)
 		row.Add(self.sReverbRoomSize,flag=flags, border=5, proportion=sprop)
 		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
 
 		# row 3
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(wx.StaticText(panel, label='Damping'),flag=flags, border=5, proportion=1)
+		row.Add(wx.StaticText(panel, label='Damp'),flag=flags, border=5, proportion=1)
 		row.Add(self.sReverbDamp,flag=flags, border=5, proportion=sprop)
 		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
 
@@ -735,10 +761,10 @@ class FluidSynthGui(wx.Frame):
 
 	# widget to control chorus effects
 	# inset panel, sets values
-	# cho_set_nr n               Use n delay lines (default 3). 0-100
+	# cho_set_nr n               Use n delay lines (default 3). 0-99
 	# cho_set_level num          Set output level of each chorus line to num. 0-1
-	# cho_set_speed num          Set mod speed of chorus to num (Hz). 25-500
-	# cho_set_depth num          Set chorus modulation depth to num (ms). 0-500
+	# cho_set_speed num          Set mod speed of chorus to num (Hz). .3-5
+	# cho_set_depth num          Set chorus modulation num (ms).
 	# chorus [0|1|on|off]        Turn the chorus on or off.
 	def createChorusControls(self,panel):
 		
@@ -746,10 +772,10 @@ class FluidSynthGui(wx.Frame):
 		slideStyle = wx.SL_HORIZONTAL|wx.SL_AUTOTICKS|wx.SL_LABELS 
 
 		self.cbEnableChorus = self.cb = wx.CheckBox(panel,-1,'Enabled')
-		self.sChorusN=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
+		self.sChorusN=wx.Slider(panel,-1,50,0,99,style=slideStyle) 
 		self.sChorusLevel=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
-		self.sChorusSpeed=wx.Slider(panel,-1,250,25,500,style=slideStyle) 
-		self.sChorusDepth=wx.Slider(panel,-1,250,0,500,style=slideStyle) 
+		self.sChorusSpeed=wx.Slider(panel,-1,250,30,500,style=slideStyle) 
+		self.sChorusDepth=wx.Slider(panel,-1,25,0,46,style=slideStyle) 
 
 		self.enableChorusControls(False) # off by default
 
@@ -769,25 +795,25 @@ class FluidSynthGui(wx.Frame):
 
 		# row 2
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(wx.StaticText(panel, label='Room Size'),flag=flags, border=5, proportion=1)
+		row.Add(wx.StaticText(panel, label='N'),flag=flags, border=5, proportion=1)
 		row.Add(self.sChorusN,flag=flags, border=5, proportion=sprop)
 		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
 
 		# row 3
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(wx.StaticText(panel, label='Damping'),flag=flags, border=5, proportion=1)
+		row.Add(wx.StaticText(panel, label='Level'),flag=flags, border=5, proportion=1)
 		row.Add(self.sChorusLevel,flag=flags, border=5, proportion=sprop)
 		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
 
 		# row 4
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(wx.StaticText(panel, label='Width'),flag=flags, border=5, proportion=1)
+		row.Add(wx.StaticText(panel, label='Speed'),flag=flags, border=5, proportion=1)
 		row.Add(self.sChorusSpeed,flag=flags, border=5, proportion=sprop)
 		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
 
 		# row 5
 		row = wx.BoxSizer(wx.HORIZONTAL)
-		row.Add(wx.StaticText(panel, label='Level'),flag=flags, border=5, proportion=1)
+		row.Add(wx.StaticText(panel, label='Depth'),flag=flags, border=5, proportion=1)
 		row.Add(self.sChorusDepth,flag=flags, border=5, proportion=sprop)
 		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
 
@@ -856,7 +882,7 @@ class FluidSynthGui(wx.Frame):
 	def onScrollGain(self,event):
 		#value = event.GetPosition()
 		value = event.GetSelection()
-		value = value * 1/20.0 # 100 -> 5 
+		value *= 1/20.0 # 100 -> 5 
 		self.fluidsynth.setGain(value)
 		#print self.fluidsynth.getGain()
 
@@ -865,52 +891,54 @@ class FluidSynthGui(wx.Frame):
 		value = event.IsChecked()
 		self.fluidsynth.setReverb(value)	
 		self.enableReverbControls(value)
-
-		print self.fluidsynth.getReverb()	
-
-
-#TODO: callback to synth
-#TODO: self.fluidsynth.enableReverb()
-#TODO: self.fluidsynth.setReverb(sReverbDamp.GetValue())
+		#print self.fluidsynth.getReverb()	
 
 	def onScrollReverbDamp(self,event):
 		value = event.GetSelection()
-		print value
-
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbDamp(value) 
 
 	def onScrollReverbRoomSize(self,event):
 		value = event.GetSelection()
-		print value
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbRoomSize(value) 
 
 	def onScrollReverbWidth(self,event):
 		value = event.GetSelection()
-		print value
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbWidth(value) 
 
 	def onScrollReverbLevel(self,event):
 		value = event.GetSelection()
-		print value
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbLevel(value) 
 
 
 	# chorus
 	def onClickEnableChorus(self,event):
-		self.enableChorusControls(event.IsChecked())
-# TODO: callback to synth
+		value = event.IsChecked()
+		self.fluidsynth.setChorus(value)
+		self.enableChorusControls(value)
 
 	def onScrollChorusN(self,event):
 		value = event.GetSelection()
-		print value
+		# scale: 1 -> 1
+		self.fluidsynth.setChorusN(value)
 
 	def onScrollChorusLevel(self,event):
 		value = event.GetSelection()
-		print value
+		value *= 1/100.0 # 100 -> 1
+		self.fluidsynth.setChorusLevel(value)
 
 	def onScrollChorusSpeed(self,event):
 		value = event.GetSelection()
-		print value
+		value *= 1/100.0 # 100 -> 1
+		self.fluidsynth.setChorusSpeed(value)
 
 	def onScrollChorusDepth(self,event):
 		value = event.GetSelection()
-		print value
+		# scale: 1 -> 1
+		self.fluidsynth.setChorusDepth(value)
 
 
 	# dir change
@@ -1056,6 +1084,8 @@ class FluidSynthGui(wx.Frame):
 		self.listInstruments.Set(self.instruments)
 		self.listInstruments.SetSelection(self.instrumentsIdx)
 
+# end class
+
 
 # main
 if __name__ == '__main__':
@@ -1081,3 +1111,4 @@ if __name__ == '__main__':
 	app.MainLoop()
 
 
+# end main
