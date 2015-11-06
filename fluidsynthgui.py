@@ -724,7 +724,7 @@ class FluidSynthGui(wx.Frame):
 		boxlabel= "Reverb"
 
 		flags = wx.ALIGN_CENTER_VERTICAL|wx.EXPAND|wx.ALL
-		sprop = 3 
+		sprop = 5 
 		box = wx.StaticBox(panel, -1, boxlabel)
 		sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
 
@@ -784,7 +784,7 @@ class FluidSynthGui(wx.Frame):
 		boxlabel= "Chorus"
 
 		flags = wx.ALIGN_CENTER_VERTICAL|wx.EXPAND|wx.ALL
-		sprop = 3 
+		sprop = 5 
 		box = wx.StaticBox(panel, -1, boxlabel)
 		sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
 
