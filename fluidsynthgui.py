@@ -569,6 +569,12 @@ class FluidSynthApi:
 	def setChorusDepth(self,num):
 		self.cmd('cho_set_depth ' + str(num), True)
 
+
+	# reset (all notes off)
+	def panic(self):
+		self.cmd('reset', True)
+
+
 # end class
 
 
@@ -638,11 +644,12 @@ class FluidSynthGui(wx.Frame):
 
 		# ui components
 		self.textSoundFontDir = wx.TextCtrl(panel)
-		self.btnSfDir = wx.Button(panel, label="Browse...")
+		self.btnSoundFontDir = wx.Button(panel, label="Browse...")
 		self.textfilterSoundFont = wx.TextCtrl(panel)
 		self.listSoundFont = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))
 		self.listInstruments = wx.ListBox(panel,choices=self.instruments,size=(-1,200))  
 		self.spinChannel = wx.SpinCtrl(panel,min=1,max=16,value="1")
+		self.btnPanic = wx.Button(panel, label="All notes off")
 
 		# start layout 
 		vbox = wx.BoxSizer(wx.VERTICAL)
@@ -651,7 +658,7 @@ class FluidSynthGui(wx.Frame):
 		row = wx.BoxSizer(wx.HORIZONTAL)
 		row.Add( wx.StaticText(panel, label='Sound Font Dir') , flag=wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, border=10)
 		row.Add(self.textSoundFontDir, flag=wx.ALIGN_CENTER_VERTICAL, proportion=4)
-		row.Add(self.btnSfDir, flag=wx.ALIGN_CENTER_VERTICAL, proportion=1)
+		row.Add(self.btnSoundFontDir, flag=wx.ALIGN_CENTER_VERTICAL, proportion=1)
 
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
@@ -671,9 +678,10 @@ class FluidSynthGui(wx.Frame):
 		# row4
 		row = wx.BoxSizer(wx.HORIZONTAL)
 		row.Add(wx.StaticText(panel, label='Filter Fonts'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT, border=10, proportion=1)
-		row.Add(self.textfilterSoundFont,flag=wx.ALIGN_CENTER_VERTICAL,proportion=4)
-		row.Add(wx.StaticText(panel, label='Channel'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT, border=10, proportion=1)
+		row.Add(self.textfilterSoundFont,flag=wx.ALIGN_CENTER_VERTICAL,proportion=2)
+		row.Add(wx.StaticText(panel, label='Channel'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT|wx.ALIGN_RIGHT, border=10, proportion=1)
 		row.Add(self.spinChannel,flag=wx.ALIGN_CENTER_VERTICAL,proportion=1)
+		row.Add(self.btnPanic,flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT,border=20,proportion=1)
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
 		panel.SetSizer(vbox)
@@ -854,13 +862,14 @@ class FluidSynthGui(wx.Frame):
 		# event binding
 
 		# sound fonts
-		self.btnSfDir.Bind(wx.EVT_BUTTON, self.onClickButtonBrowse, self.btnSfDir)
+		self.btnSoundFontDir.Bind(wx.EVT_BUTTON, self.onClickButtonBrowse, self.btnSoundFontDir)
 		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpDirectory, self.textSoundFontDir)
 		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.onSelectSoundFont, self.listSoundFont)
 		self.listSoundFont.Bind(wx.wx.EVT_KEY_DOWN, self.onKeyDownSoundFont, self.listSoundFont)
 		self.listInstruments.Bind(wx.EVT_LISTBOX, self.onSelectInstrument,self.listInstruments)
 		self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpFilterSoundFont,self.textfilterSoundFont)
 		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.onClickChannel,self.spinChannel)
+		self.btnPanic.Bind(wx.EVT_BUTTON, self.onClickPanic, self.btnPanic)
 
 		# levels 
 		self.sGain.Bind(wx.EVT_SLIDER,self.onScrollGain)
@@ -882,18 +891,15 @@ class FluidSynthGui(wx.Frame):
 
 	# master gain	
 	def onScrollGain(self,event):
-		#value = event.GetPosition()
 		value = event.GetSelection()
 		value *= 1/20.0 # 100 -> 5 
 		self.fluidsynth.setGain(value)
-		#print self.fluidsynth.getGain()
 
 	# reverb 
 	def onClickEnableReverb(self,event):
 		value = event.IsChecked()
 		self.fluidsynth.setReverb(value)	
 		self.enableReverbControls(value)
-		#print self.fluidsynth.getReverb()	
 
 	def onScrollReverbDamp(self,event):
 		value = event.GetSelection()
@@ -1014,6 +1020,10 @@ class FluidSynthGui(wx.Frame):
 	def onClickChannel(self,event):
 		chan=self.spinChannel.GetValue()
 		self.fluidsynth.activeChannel = chan	
+
+	# reset (all notes off)
+	def onClickPanic(self, event):
+		self.fluidsynth.panic()
 
 
 	# api ...
