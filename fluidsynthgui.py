@@ -558,7 +558,7 @@ class FluidSynthApi:
 			return (id,voices)
 
 		except Exception,e:
-			print "error: font and instrument did not load: " + str(sf2)
+			print "error: font and instrument did not load: " + sf2
 			print e
 
 		return (-1,[])
@@ -1254,17 +1254,18 @@ class FluidSynthGui(wx.Frame):
 	def onKeyUpDirectory(self, event):
 		keycode = event.GetKeyCode()
 		path = self.textSoundFontDir.GetValue()
-		self.changeDir(path)
+		self.changeDir(path,True)
 		event.Skip()
 
 
 	def onClickButtonBrowse(self, event):
 		dlg = wx.DirDialog(self, "Choose a directory:", style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
+		dlg.SetPath(self.dir)
 		if dlg.ShowModal() == wx.ID_OK:
 			print 'selected: %s\n' % dlg.GetPath()
 			path = dlg.GetPath()
 			self.textSoundFontDir.SetValue(path)
-			self.changeDir(path)
+			self.changeDir(path,True)
 
 		dlg.Destroy()
 		event.Skip()
@@ -1276,9 +1277,17 @@ class FluidSynthGui(wx.Frame):
 		idx = self.listSoundFont.GetSelection()
 		if ( idx < 0 ):
 			return
+
 		sel = self.soundFonts[idx]
 		path = self.dir + '/' + sel
-		self.setSoundFont(path)
+
+		self.instruments = [] # refresh list 
+		if os.path.isdir(path):
+			# navigate to the new dir
+			self.changeDir(path,True)
+		else:
+			# try to open as sf2
+			self.setSoundFont(path)
 		
 		if event != None:
 			event.Skip()
@@ -1345,19 +1354,36 @@ class FluidSynthGui(wx.Frame):
 
 
 	# load new dir
-	def changeDir(self, path):
-		if ( os.path.isdir(path) ):
-			self.dir = path
-			self.drawSoundFontList()
+	def changeDir(self, path, clearSearchFilter=False):
 
+		path = os.path.realpath(path) # cannonical form
+		if not os.path.isdir(path):
+			print "error: not a directory: " + path
+			return
+
+		self.dir = path
+
+		if clearSearchFilter:
+			# clear filter
+			self.textFilterSoundFont.SetValue('') 
+
+		# sync dir text input
+		if path != self.textSoundFontDir.GetValue():
+			self.textSoundFontDir.SetValue(path) 
+
+		self.drawSoundFontList()
 
 	# refresh list of soundfonts
 	# expects: changeDir should be called first 
 	def drawSoundFontList(self,cache=False):
 		if not cache:
-			self.soundFontsAll = os.listdir(self.dir)
+			allFiles = os.listdir(self.dir)
+			# exclude dot files
+			allFiles = [x for x in allFiles if not x.startswith('.')]	
+			self.soundFontsAll = allFiles 
 
-		self.soundFonts = self.filterSoundFont()
+		self.soundFonts = self.filterSoundFont() # apply search filter
+		self.soundFonts.insert(0, '..') # add up-dir option
 		self.listSoundFont.Set(self.soundFonts)
 
 		self.drawInstrumentList(0);
@@ -1366,19 +1392,26 @@ class FluidSynthGui(wx.Frame):
 	# change soundFont in fluid synth 
 	def setSoundFont(self, path):
 
+		print "hit"
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
+
+		print "id: " + str(id) 
+		if id == -1:
+			instrumentsAll = ["error: could not load as .sf2 file"]
+
 		self.instrumentsAll = instrumentsAll
 		self.instruments = self.filterInstruments()
 
-		# select item if not already
 		fontName = os.path.basename(path) 
 		idx = self.soundFonts.index(fontName)
-		if idx != -1 and idx != self.listSoundFont.GetSelection():
+		if id != -1 and idx != -1 and idx != self.listSoundFont.GetSelection():
+			# select item if not already
 			# visually select font in list if needed
 			self.listSoundFont.SetSelection(idx)
 
 		#self.setInstrumentByIdx(0) # already initalized
 		self.drawInstrumentList(0);
+		return id
 
 
 	# refresh entire list of instruments  
