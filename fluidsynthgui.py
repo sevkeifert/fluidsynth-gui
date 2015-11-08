@@ -1282,7 +1282,7 @@ class FluidSynthGui(wx.Frame):
 
 		path = self.getSelectedPath()
 
-		if not os.path.isdir(path):
+		if path != None and not os.path.isdir(path):
 			# automatically try to open file as sf2
 			self.instruments = [] # refresh list 
 			self.setSoundFont(path)
@@ -1334,7 +1334,9 @@ class FluidSynthGui(wx.Frame):
 			if path != None and os.path.isdir(path):
 				# navigate to the new dir
 				self.changeDir(path,True)
-
+#		else:
+#				a = chr(keycode)
+					
 		event.Skip()
 
 
@@ -1410,6 +1412,12 @@ class FluidSynthGui(wx.Frame):
 			self.textSoundFontDir.SetValue(path) 
 
 		self.drawSoundFontList()
+
+		# highlight first item 	
+		if len(self.soundFonts):
+			self.listSoundFont.SetSelection(0)
+			self.listSoundFont.SetFocus()
+
 
 	# refresh list of soundfonts
 	# expects: changeDir should be called first 
