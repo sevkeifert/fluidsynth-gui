@@ -45,7 +45,7 @@
 # Tested with: xubuntu 14.04, FluidSynth version 1.1.6
 #
 #
-# Fluidsynth commands definitions used:
+# All Fluidsynth command definitions that are used:
 #
 #   echo                        Echo data back 
 #   load file                   Load SoundFont 
@@ -53,6 +53,23 @@
 #   fonts                       Display the list of loaded SoundFonts
 #   inst font                   Print out the available instruments for the font
 #   select chan font bank prog  Combination of bank-select and program-change
+#	get var
+#	set var value
+#		synth.gain             0 - 10 
+#		synth.reverb.active    1 or 0
+#		synth.chorus.activ     1 or 0
+#   gain value                 Set the master gain (0 < gain < 5)
+#   reverb [0|1|on|off]        Turn the reverb on or off
+#   rev_setroomsize num        Change reverb room size. 0-1
+#   rev_setdamp num            Change reverb damping. 0-1
+#   rev_setwidth num           Change reverb width. 0-1
+#   rev_setlevel num           Change reverb level. 0-1
+#   chorus [0|1|on|off]        Turn the chorus on or off
+#   cho_set_nr n               Use n delay lines (default 3)
+#   cho_set_level num          Set output level of each chorus line to num
+#   cho_set_speed num          Set mod speed of chorus to num (Hz)
+#   cho_set_depth num          Set chorus modulation depth to num (ms)
+#   reset                      All notes off
 #
 #
 # Classes defined below:
@@ -68,7 +85,10 @@ import re
 import time
 import socket
 import subprocess
+import traceback
 import optparse
+import signal
+import json
 
 
 # API
@@ -85,9 +105,14 @@ class FluidSynthApi:
 
 		# memory/font management
 		# we only can load 16 fonts on 16 channels.  unload the rest.
-		self.fontsInUse=[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]
-		self.activeChannel = 1 # base 1
-		self.activeSoundFont = -1
+		self.fontFilesLoaded={}      # font_id: font_file
+		self.fontsInUse=[-1] * 16    # font_id.  position is channel
+		self.instrumentsInUse=[""] * 16  # instrument_name.  position is channel
+		self.activeChannel = 1       # base 1.  all new instruments load here
+		self.lastChannel = 1         # base 1. last channel loaded 
+		self.activeSoundFontId = -1  # last font loaded
+		self.activeSoundFontFile = ''    # last soundfont loaded
+		self.activeInstrument = ''   # last instrument loaded
 
 		# socket io settings
 		self.host='localhost'
@@ -121,8 +146,6 @@ class FluidSynthApi:
 
 
 	# test/initialize connection to fluidsynth
-	# NOTE: fluidsynth only supports one socket connection
-	# push all messages to it
 	def initFluidsynth(self):
 
 		try:
@@ -150,15 +173,19 @@ class FluidSynthApi:
 					return True
 
 				except Exception,e:
-					print "retry ..."
 					print e
+					print "retry ..."
 					time.sleep(.5)
 
 		except Exception,e:
 			print "error: fluidsynth could not start"
 			print e
 
-		print "error: giving up"
+		print "error: giving up. :("
+		print "you may try stopping any fluidsynth that is currently running."
+		print "for example, on linux:"
+		print "    killall fluidsynth"
+		print "    killall -s 9 fluidsynth"
 		return False
 
 
@@ -170,15 +197,18 @@ class FluidSynthApi:
 		except:
 			print "fluidsynth will be left running"			
 
+
 	# create socket connection
-	# do NOT connect on every request (like HTTP)
-	# fluidsynth seems to only be able to spawn a small number of total sockets 
+	# NOTE: do NOT connect on every request (like HTTP)
+	# fluidsynth seems to only be able to spawn a small number of total sockets.
+	# reuse the same socket connection for all IO, or you will run out of 
+	# fluidsynth threads.
 	def connect(self):
 
 		self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.clientsocket.connect((self.host,self.port))
 		self.clientsocket.settimeout(self.readtimeout)
-		print "connected"
+		print "connected to port " + str(self.port)
 
 
 	# cleanup sockets when finished
@@ -237,9 +267,11 @@ class FluidSynthApi:
 
 
 	# full request/response transaction
-	# nl not required
-	# returns data packet (only if blocking)
-	# returns True (only if non-blocking)
+	# the end of line "\n" char is not required.
+	# NOTE: non-blocking mode is MUCH faster.  
+	# always use non-blocking unless you actually need to read the response.
+	#   returns: data packet (only if blocking)
+	#   returns: True (only if non-blocking)
 	def cmd(self, packet, non_blocking = False):
 		data = ""
 		self.send(packet+"\n")
@@ -300,24 +332,66 @@ class FluidSynthApi:
 	#			lines = lines + "\n" + line
 
 
+	# getter/setter for fluidsynth config
+	def setValue(self,key,value):
+		value = self.cmd('set ' + key + ' ' + value, True)
+
+	def getValue(self,key):
+		value = self.cmd('get ' + key)
+		values = value.split() 
+		if len(values):
+			return values[-1]
+		else:
+			return '' 
+
+
+	# parser utils
+	def isTruthy(self,value):
+		if value in ["true","1","on","yes"]:
+			return True
+		return False
+	def getBoolValue(self,key):
+		value = self.getValue(key)
+		return self.isTruthy(value)
+	def getNumValue(self,key):
+		value = self.getValue(key)
+		value = float(value)
+		return value 
+	def getIntValue(self,key):
+		value = self.getValue(key)
+		value = int(value)
+		return value 
+
+
+	# channel control
+	def setActiveChannel(self,channel):
+		self.activeChannel = channel	
+
+	def getActiveChannel(self,channel):
+		return self.activeChannel
+
+
 	# load sound soundfont, for example:
 	#
 	#> load "/home/Music/sf2/Brass 4.SF2"
 	#loaded SoundFont has ID 1
 	#fluidsynth: warning: No preset found on channel 9 [bank=128 prog=0]
 	#> 
-	def loadSoundFont(self, sf2):
+	def loadSoundFont(self, sf2Filename):
 		try:
-			data = self.cmd('load "'+ sf2 +'"')
+			data = self.cmd('load "'+ sf2Filename +'"')
+			# parse sound font id
 			ids = [int(s) for s in data.split() if s.isdigit()]	
 			id = ids[-1] # return last item
 			id = int(id)
 			if id > -1:
-				self.activeSoundFont = id
+				self.fontFilesLoaded[id] = sf2Filename # store mapping id->file
+				self.activeSoundFontId = id
+				self.activeSoundFontFile = sf2Filename
 				return id
 
 		except Exception,e:
-			print "error: could not load font: " + sf2
+			print "error: could not load font: " + sf2Filename
 			print e	
 
 		return -1
@@ -334,7 +408,7 @@ class FluidSynthApi:
 			data = self.cmd('fonts')
 			ids=data.splitlines()
 					
-			#ids = ids[3:] # discard first 3 items (header)
+			#ids = ids[3:] # cli only: discard first 3 items (header)
 			ids_clean = []
 			for id in ids:
 				# example:
@@ -383,6 +457,8 @@ class FluidSynthApi:
 					pass
 				else:
 					self.cmd('unload '+ sid, True)
+					del self.fontFilesLoaded[id]
+
 		except Exception,e:
 			print "error: could not unload fonts"
 			print e
@@ -402,7 +478,7 @@ class FluidSynthApi:
 		try:
 			data = self.cmd('inst ' + str(id))
 			ids = data.splitlines()
-			#ids = ids[2:] # discard first two items (header)
+			#ids = ids[2:] # cli only: discard first two items (header)
 			return ids
 
 		except Exception,e:
@@ -423,33 +499,36 @@ class FluidSynthApi:
 	# for example:
 	#select chan sfont bank prog
 	#> 
-	def setInstrument(self,id):
+	def setInstrument(self,instrumentName):
 
-		if id == '':
-			return ''
+		if instrumentName == '':
+			raise Exception("instrument name cannot be blank")
 
-		if self.activeSoundFont < 0:
+		if self.activeSoundFontId < 0:
 			return ''
 
 		try:
-			parts = id.split()
+			parts = instrumentName.split()
 			ids = parts[0].split('-')			
-			chan = str(self.activeChannel-1) # base 0
-			font = str(self.activeSoundFont)
+			chan0 = str(self.activeChannel-1) # convert base 0
+			font = str(self.activeSoundFontId)
 			bank = ids[0]
 			prog = ids[1]
-			cmd = 'select '+chan+' '+font+' '+bank+' '+prog
+			cmd = 'select '+chan0+' '+font+' '+bank+' '+prog
 			data = self.cmd(cmd, True)
 
-			self.fontsInUse[int(chan)] = int(font)
+			self.activeInstrument = instrumentName
+			self.fontsInUse[int(chan0)] = int(font)
+			self.instrumentsInUse[int(chan0)] = instrumentName 
+			self.lastChannel = self.activeChannel
 
 			return data
 
 		except Exception,e:
-			print 'error: could not select instrument: ' + id
+			print 'error: could not select instrument: ' + str(id)
 			print e
 
-		return '' 
+		return False 
 
 
 	# load soundfont, select first program voice
@@ -473,42 +552,11 @@ class FluidSynthApi:
 			return (id,voices)
 
 		except Exception,e:
-			print "error: voice did not load: " + sf2
+			print "error: font and instrument did not load: " + str(sf2)
 			print e
 
 		return (-1,[])
 
-
-	# get/set config
-	def setValue(self,key,value):
-		value = self.cmd('set ' + key + ' ' + value, True)
-
-	def getValue(self,key):
-		value = self.cmd('get ' + key)
-		values = value.split() 
-		if len(values):
-			return values[-1]
-		else:
-			return '' 
-
-	def isTruthy(self,value):
-		if value in ["true","1","on","yes"]:
-			return True
-		return False
-
-	def getBoolValue(self,key):
-		value = self.getValue(key)
-		return self.isTruthy(value)
-
-	def getNumValue(self,key):
-		value = self.getValue(key)
-		value = float(value)
-		return value 
-
-	def getIntValue(self,key):
-		value = self.getValue(key)
-		value = int(value)
-		return value 
 
 	# gain api
 	#    gain value                Set the master gain (0 < gain < 5)
@@ -519,6 +567,7 @@ class FluidSynthApi:
 
 	def getGain(self):
 		self.getNumValue('synth.gain') / 2
+
 
 	# reverb api
 	#    reverb [0|1|on|off]        Turn the reverb on or off
@@ -545,6 +594,7 @@ class FluidSynthApi:
 
 	# note: no getters for reverb details	
 
+
 	# chorus api
 	#    cho_set_nr n               Use n delay lines (default 3)
 	#    cho_set_level num          Set output level of each chorus line to num
@@ -560,7 +610,7 @@ class FluidSynthApi:
 		# ? not auto updated
 		self.setValue('synth.chorus.active', str(int(boolean))) 
 
-	def setChorusN(self,num):
+	def setChorusNR(self,num):
 		self.cmd('cho_set_nr ' + str(num), True)
 	def setChorusLevel(self,num):
 		self.cmd('cho_set_level ' + str(num), True)
@@ -568,6 +618,8 @@ class FluidSynthApi:
 		self.cmd('cho_set_speed ' + str(num), True)
 	def setChorusDepth(self,num):
 		self.cmd('cho_set_depth ' + str(num), True)
+
+	# note: no getters for chorus details	
 
 
 	# reset (all notes off)
@@ -579,6 +631,14 @@ class FluidSynthApi:
 
 
 # GUI
+# Expected order of user events
+#	1. load dir
+#	2. optional: filter list
+#	3. optional: change channel 
+# 	4. load sound font
+# 	5. load instruments
+#	6. select instrument
+#	7. adjust levels 
 class FluidSynthGui(wx.Frame):
 
 	def __init__(self, parent, title, api):
@@ -589,32 +649,253 @@ class FluidSynthGui(wx.Frame):
 		self.fluidsynth = api 
 
 		self.soundFontsAll = [] # everything in dir 
-		self.instrumentsAll = [] # everything in dir]
 		self.soundFonts = [] # filtered
+		self.instrumentsAll = [] # everything in current soundfont
 		self.instruments = [] # filtered
 		self.soundFontsIdx = 0
 		self.instrumentsIdx = 0
 		self.soundFontsFilter = "" 
 	
+		# persistent data
+		self.data = {}
+		self.dataDir = os.path.expanduser('~') + "/.fluidsynth-gui"
+		self.dataFile = self.dataDir + "/data.json" # gui state
+		#self.snapshotFile = self.dataDir + "/jacksnapshot" # jack connections
+
+		# what components will be persistent?
+		self.saveUiState = [
+				"textSoundFontDir",
+				"textFilterSoundFont",
+				"spinChannel",
+				"sGain",
+				"cbEnableReverb",
+				"sReverbDamp",
+				"sReverbRoomSize",
+				"sReverbWidth",
+				"sReverbLevel",
+				"cbEnableChorus",
+				"sChorusNR",
+				"sChorusLevel",
+				"sChorusSpeed",
+				"sChorusDepth",
+				"textSoundFontDir",
+				"textFilterSoundFont",
+				"spinChannel",
+		]
+
+		self.saveFluidsynthState = [
+				"fontsInUse",
+				"instrumentsInUse",
+				"fontFilesLoaded",
+				"activeChannel",
+				"activeInstrument",
+				"lastChannel",
+				"activeSoundFontId",
+				"activeSoundFontFile",
+		]
 
 
-		self.initUI()		
-		self.bindEvents()		
-		self.processArgs()
+		self.initUI()                  # create widgets
+		self.bindEvents()              # bind ui widgets to callback event handlers		
+		self.loadDataFile()            # load last state of GUI from file
+		self.applyPreferenceSnapshot() # restore last state of GUI
+		self.processArgs()             # cli overrides saved state
+
 		self.Centre()
 		self.Show() 
 
 
-	# command line args
+	###########################################################################
+	# data utilities ...
+	###########################################################################
+
+	# process command line args
 	def processArgs(self):
 		options = self.fluidsynth.options
 
 		if options.dir != "":
 			self.dir = options.dir
 			self.textSoundFontDir.SetValue(self.dir)
-			self.refreshSoundFonts()
+			self.drawSoundFontList()
 
 
+	# getter/setter for persistent data
+	def getData(self,key,default=""):
+		if key in self.data:
+			return self.data[key]
+		return default	
+	def setData(self,key,value):
+		self.data[key] = value
+	def unsetData(self,key):
+		del self.data[key]
+
+
+	# create persistent data storage, so GUI can restore last state
+	# Everything in self.data will get serialized as a json file
+	# and will be written to ~/.fluidsynth-gui/
+	def storeDataFile(self):
+		try:
+			if not os.path.exists(self.dataDir):
+				print "create preference dir " + self.dataDir
+				os.makedirs(self.dataDir)	
+			data = json.dumps(self.data)
+			f = open(self.dataFile, 'w+')
+			print "save preferences to " + self.dataFile
+			f.write(data)
+			f.close()
+		except Exception, e:
+			print "no preference file saved: " + self.dataFile
+			print e
+
+
+	# restore persistent data
+	def loadDataFile(self):
+		try:
+			print "read preferences from " + self.dataFile
+			f = open(self.dataFile, 'r')
+			data = f.read()
+			f.close()
+			self.data = json.loads(data)
+		except Exception, e:
+			print "no preference file loaded: " + self.dataFile
+			print e
+
+
+	# serialize GUI/api state to self.data
+	def takePreferenceSnapshot(self):
+
+		try:	
+			# save ui widget properties
+			# all objects in list should have a GetValue() function
+			for prop in self.saveUiState: 
+				try:
+					obj = getattr(self, prop)
+					if hasattr(obj, 'GetValue'):
+						getvalue = getattr(obj, 'GetValue')
+						if callable(getvalue):
+							self.setData(prop,getvalue())
+						else:
+							print "error: " + prop + " does not have GetValue()"
+				except Exception, e2:
+					print e2
+					print "remove property causing error: " + prop
+					self.unsetData(prop)
+
+			# save api properties
+			for prop in self.saveFluidsynthState: 
+				try:
+					obj = getattr(self.fluidsynth, prop)
+					self.setData(prop,obj)
+				except Exception, e2:
+					print e2
+					print "remove property causing error: " + prop
+					self.unsetData(prop)
+
+		except Exception, e:
+			print "error: could not take snapshot of preferences"
+			print e
+		
+
+	# retore state of GUI/api to last snapshot
+	def applyPreferenceSnapshot(self):
+
+		try:	
+			# restore ui widget properties
+			# all objects in list has a GetValue() function
+			for prop in self.saveUiState: 
+				obj = getattr(self, prop)
+				if hasattr(obj, 'SetValue'):
+					setvalue = getattr(obj, 'SetValue')
+					if callable(setvalue):
+						setvalue(self.getData(prop))
+					else:
+						print "error: " + prop + " does not have SetValue()"
+
+			# trigger change on all level controls to sync api
+			self.onScrollGain()
+			self.onClickEnableReverb()
+			self.onScrollReverbDamp()
+			self.onScrollReverbRoomSize()
+			self.onScrollReverbWidth()
+			self.onScrollReverbLevel()
+			self.onClickEnableChorus()
+			self.onScrollChorusNR()
+			self.onScrollChorusLevel()
+			self.onScrollChorusSpeed()
+			self.onScrollChorusDepth()
+
+			# restore core api properties manually...
+
+			# restore last dir, will restore filtered view
+			path = self.getData("textSoundFontDir")			
+			print "restore dir path: " + str(path)
+			self.changeDir(path)		
+
+			# restore last fonts in memory
+			# note: font ids will change on reloading
+			fontsInUse = self.getData("fontsInUse")	 # overall map 
+			fontFilesLoaded = self.getData("fontFilesLoaded")			
+			instrumentsInUse = self.getData("instrumentsInUse")	
+			activeChannel = self.getData("activeChannel") # base 1
+			lastChannel = self.getData("lastChannel") # base 1
+			activeSoundFontFile = self.getData("activeSoundFontFile")
+			activeInstrument = self.getData("activeInstrument")
+
+			# restore inactive fonts 
+			print "restore inactive fonts..."
+			for idx, oldFontId in enumerate(fontsInUse):
+
+				if oldFontId == -1: # not in use
+					continue
+
+				channel = idx+1 # 1-based
+				font = fontFilesLoaded[str(oldFontId)]
+				instrument = instrumentsInUse[idx]
+
+				print "found "
+				print "	channel: " + str(channel) 
+				print "	font: " + str(font) 
+				print "	instrument: " + str(instrument) 
+
+				if font == '':
+					print "error: missing font data"
+					continue
+
+				if instrument == '':
+					print "error: missing instrument data"
+					continue
+
+				if channel == lastChannel and font == activeSoundFontFile and instrument == activeInstrument:
+					print "found primary font"	
+					continue
+
+				self.fluidsynth.setActiveChannel(channel)
+				self.fluidsynth.loadSoundFont(font)
+				self.fluidsynth.setInstrument(instrument)
+
+			# restore primary active channel
+			print "restore active channel: " + str(activeChannel)
+			self.fluidsynth.setActiveChannel(activeChannel)
+
+			# restore primary font
+			if activeSoundFontFile != '':
+				self.setSoundFont(activeSoundFontFile)
+
+			# restore primary instrument
+			if activeInstrument != '':
+				self.setInstrumentByName(activeInstrument)
+
+		except Exception, e:
+			print "error: could not restore snapshot of preferences"
+			print e
+			traceback.print_exc()
+
+
+	###########################################################################
+	# widgets for level controls (returns sizers) ... 
+	###########################################################################
+
+	# create all gui elements
 	def initUI(self):
 
 		self.panel = wx.Panel(self)
@@ -636,16 +917,13 @@ class FluidSynthGui(wx.Frame):
 		sizer.Fit(self)
 
 
-	# widgets for level controls (returns sizers) ... 
-
-
 	# this is the main widget for loading soundfonts
 	def createSoundFontControls(self,panel):
 
 		# ui components
 		self.textSoundFontDir = wx.TextCtrl(panel)
 		self.btnSoundFontDir = wx.Button(panel, label="Browse...")
-		self.textfilterSoundFont = wx.TextCtrl(panel)
+		self.textFilterSoundFont = wx.TextCtrl(panel)
 		self.listSoundFont = wx.ListBox(panel, choices=self.soundFonts, size=(-1,200))
 		self.listInstruments = wx.ListBox(panel,choices=self.instruments,size=(-1,200))  
 		self.spinChannel = wx.SpinCtrl(panel,min=1,max=16,value="1")
@@ -678,7 +956,7 @@ class FluidSynthGui(wx.Frame):
 		# row4
 		row = wx.BoxSizer(wx.HORIZONTAL)
 		row.Add(wx.StaticText(panel, label='Filter Fonts'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT, border=10, proportion=1)
-		row.Add(self.textfilterSoundFont,flag=wx.ALIGN_CENTER_VERTICAL,proportion=2)
+		row.Add(self.textFilterSoundFont,flag=wx.ALIGN_CENTER_VERTICAL,proportion=2)
 		row.Add(wx.StaticText(panel, label='Channel'),flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT|wx.ALIGN_RIGHT, border=10, proportion=1)
 		row.Add(self.spinChannel,flag=wx.ALIGN_CENTER_VERTICAL,proportion=1)
 		row.Add(self.btnPanic,flag=wx.ALIGN_CENTER_VERTICAL|wx.LEFT,border=20,proportion=1)
@@ -782,7 +1060,7 @@ class FluidSynthGui(wx.Frame):
 		slideStyle = wx.SL_HORIZONTAL|wx.SL_AUTOTICKS|wx.SL_LABELS 
 
 		self.cbEnableChorus = self.cb = wx.CheckBox(panel,-1,'Enabled')
-		self.sChorusN=wx.Slider(panel,-1,50,0,99,style=slideStyle) 
+		self.sChorusNR=wx.Slider(panel,-1,50,0,99,style=slideStyle) 
 		self.sChorusLevel=wx.Slider(panel,-1,50,0,100,style=slideStyle) 
 		self.sChorusSpeed=wx.Slider(panel,-1,250,30,500,style=slideStyle) 
 		self.sChorusDepth=wx.Slider(panel,-1,25,0,46,style=slideStyle) 
@@ -806,7 +1084,7 @@ class FluidSynthGui(wx.Frame):
 		# row 2
 		row = wx.BoxSizer(wx.HORIZONTAL)
 		row.Add(wx.StaticText(panel, label='N'),flag=flags, border=5, proportion=1)
-		row.Add(self.sChorusN,flag=flags, border=5, proportion=sprop)
+		row.Add(self.sChorusNR,flag=flags, border=5, proportion=sprop)
 		sizer.Add(row, 0, wx.EXPAND|wx.ALL, 2)
 
 		# row 3
@@ -849,17 +1127,12 @@ class FluidSynthGui(wx.Frame):
 		vbox.Add(row, flag=wx.EXPAND|wx.ALL, border=5)
 
 		panel.SetSizer(vbox)
-		#vbox.Fit(panel)
-		#panel.SetSizer(row)
-		#return row
 		return vbox
 
 
-	# wire up controls to callbacks
-	# this lists out all the controls and events
+	# wire up controls to callbacks.
+	# note: this lists out all controls and events in one place.
 	def bindEvents(self):
-
-		# event binding
 
 		# sound fonts
 		self.btnSoundFontDir.Bind(wx.EVT_BUTTON, self.onClickButtonBrowse, self.btnSoundFontDir)
@@ -867,7 +1140,7 @@ class FluidSynthGui(wx.Frame):
 		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.onSelectSoundFont, self.listSoundFont)
 		self.listSoundFont.Bind(wx.wx.EVT_KEY_DOWN, self.onKeyDownSoundFont, self.listSoundFont)
 		self.listInstruments.Bind(wx.EVT_LISTBOX, self.onSelectInstrument,self.listInstruments)
-		self.textfilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpFilterSoundFont,self.textfilterSoundFont)
+		self.textFilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpFilterSoundFont,self.textFilterSoundFont)
 		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.onClickChannel,self.spinChannel)
 		self.btnPanic.Bind(wx.EVT_BUTTON, self.onClickPanic, self.btnPanic)
 
@@ -881,139 +1154,152 @@ class FluidSynthGui(wx.Frame):
 		self.sReverbLevel.Bind(wx.EVT_SLIDER,self.onScrollReverbLevel)
 
 		self.cbEnableChorus.Bind(wx.EVT_CHECKBOX,self.onClickEnableChorus)
-		self.sChorusN.Bind(wx.EVT_SLIDER,self.onScrollChorusN)
+		self.sChorusNR.Bind(wx.EVT_SLIDER,self.onScrollChorusNR)
 		self.sChorusLevel.Bind(wx.EVT_SLIDER,self.onScrollChorusLevel)
 		self.sChorusSpeed.Bind(wx.EVT_SLIDER,self.onScrollChorusSpeed)
 		self.sChorusDepth.Bind(wx.EVT_SLIDER,self.onScrollChorusDepth)
 
+		self.Bind(wx.EVT_CLOSE, self.onClose)
 
-	# define event callbacks ...
+
+	###########################################################################
+	# define event handlers ...
+	# most of these can be called directly (event=None)
+	###########################################################################
 
 	# master gain	
-	def onScrollGain(self,event):
-		value = event.GetSelection()
+	def onScrollGain(self,event=None):
+		value = self.sGain.GetValue()
 		value *= 1/20.0 # 100 -> 5 
 		self.fluidsynth.setGain(value)
 
+
 	# reverb 
-	def onClickEnableReverb(self,event):
-		value = event.IsChecked()
+	def onClickEnableReverb(self,event=None):
+		value = self.cbEnableReverb.GetValue()
 		self.fluidsynth.setReverb(value)	
 		self.enableReverbControls(value)
 
-	def onScrollReverbDamp(self,event):
-		value = event.GetSelection()
+
+	def onScrollReverbDamp(self,event=None):
+		value = self.sReverbDamp.GetValue()
 		value *= 1/100.0  # 100 -> 1
 		self.fluidsynth.setReverbDamp(value) 
 
-	def onScrollReverbRoomSize(self,event):
-		value = event.GetSelection()
+
+	def onScrollReverbRoomSize(self,event=None):
+		value = self.sReverbRoomSize.GetValue()
 		value *= 1/100.0  # 100 -> 1
 		self.fluidsynth.setReverbRoomSize(value) 
 
-	def onScrollReverbWidth(self,event):
-		value = event.GetSelection()
+
+	def onScrollReverbWidth(self,event=None):
+		value = self.sReverbWidth.GetValue()
 		value *= 1/100.0  # 100 -> 1
 		self.fluidsynth.setReverbWidth(value) 
 
-	def onScrollReverbLevel(self,event):
-		value = event.GetSelection()
+
+	def onScrollReverbLevel(self,event=None):
+		value = self.sReverbLevel.GetValue()
 		value *= 1/100.0  # 100 -> 1
 		self.fluidsynth.setReverbLevel(value) 
 
 
 	# chorus
-	def onClickEnableChorus(self,event):
-		value = event.IsChecked()
+	def onClickEnableChorus(self,event=None):
+		value = self.cbEnableChorus.GetValue()
 		self.fluidsynth.setChorus(value)
 		self.enableChorusControls(value)
 
-	def onScrollChorusN(self,event):
-		value = event.GetSelection()
-		# scale: 1 -> 1
-		self.fluidsynth.setChorusN(value)
 
-	def onScrollChorusLevel(self,event):
-		value = event.GetSelection()
+	def onScrollChorusNR(self,event=None):
+		value = self.sChorusNR.GetValue()
+		# scale: 1 -> 1
+		self.fluidsynth.setChorusNR(value)
+
+
+	def onScrollChorusLevel(self,event=None):
+		value = self.sChorusLevel.GetValue()
 		value *= 1/100.0 # 100 -> 1
 		self.fluidsynth.setChorusLevel(value)
 
-	def onScrollChorusSpeed(self,event):
-		value = event.GetSelection()
+
+	def onScrollChorusSpeed(self,event=None):
+		value = self.sChorusSpeed.GetValue()
 		value *= 1/100.0 # 100 -> 1
 		self.fluidsynth.setChorusSpeed(value)
 
-	def onScrollChorusDepth(self,event):
-		value = event.GetSelection()
+
+	def onScrollChorusDepth(self,event=None):
+		value = self.sChorusDepth.GetValue()
 		# scale: 1 -> 1
 		self.fluidsynth.setChorusDepth(value)
 
 
 	# dir change
 	def onKeyUpDirectory(self, event):
-		event.Skip()
 		keycode = event.GetKeyCode()
 		path = self.textSoundFontDir.GetValue()
-
-		if ( os.path.isdir(path) ):
-			self.dir = path
-			self.refreshSoundFonts()
+		self.changeDir(path)
+		event.Skip()
 
 
 	def onClickButtonBrowse(self, event):
-		event.Skip()
 		dlg = wx.DirDialog(self, "Choose a directory:", style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
 		if dlg.ShowModal() == wx.ID_OK:
 			print 'selected: %s\n' % dlg.GetPath()
-			self.dir = dlg.GetPath()
-			self.textSoundFontDir.SetValue(self.dir)
-			self.refreshSoundFonts()
+			path = dlg.GetPath()
+			self.textSoundFontDir.SetValue(path)
+			self.changeDir(path)
 
 		dlg.Destroy()
+		event.Skip()
 
 
 	# sound soundfont change
-	def onSelectSoundFont(self, event):
-		idx = event.GetSelection()
-		event.Skip()
+	def onSelectSoundFont(self, event=None):
+
+		idx = self.listSoundFont.GetSelection()
 		if ( idx < 0 ):
 			return
 		sel = self.soundFonts[idx]
 		path = self.dir + '/' + sel
-		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
-		self.instrumentsAll = instrumentsAll
-		self.instrumentsIdx = 0
-		self.refreshInstruments();
+		self.setSoundFont(path)
 		
+		if event != None:
+			event.Skip()
 
-	def onSelectInstrument(self, event):
+
+	def onSelectInstrument(self, event=None):
 		idx = self.listInstruments.GetSelection()
-		event.Skip()
-
 		# NOTE: idx is -1 when using the arrow keys
 		if ( idx < 0 ):
 			return
-		self.instrumentsIdx = int(idx)
-		self.loadInstrument()
+
+		self.setInstrumentByIdx(idx)
+		#self.drawInstrumentList(0); # no draw needed 
+
+		if event != None:
+			event.Skip()
 
 
 	def onKeyDownSoundFont(self, event):
 		keycode = event.GetKeyCode()
 		event.Skip()
 		if keycode == wx.WXK_LEFT:
-			self.instrumentsIdx = self.incInstrument(self.instrumentsIdx,-1)
-			self.loadInstrument()
-			self.refreshInstruments()
+			idx = self.incInstrument(self.instrumentsIdx,-1)
+			self.setInstrumentByIdx(idx)
+			self.drawInstrumentList()
 		elif keycode == wx.WXK_RIGHT:
-			self.instrumentsIdx = self.incInstrument(self.instrumentsIdx,1)
-			self.loadInstrument()
-			self.refreshInstruments()
+			idx = self.incInstrument(self.instrumentsIdx,1)
+			self.setInstrumentByIdx(idx)
+			self.drawInstrumentList()
 
 
 	# filters
 	def onKeyUpFilterSoundFont(self,event):
+		self.drawSoundFontList(True)
 		event.Skip()
-		self.refreshSoundFonts(True)
 
 
 	# channel
@@ -1021,16 +1307,111 @@ class FluidSynthGui(wx.Frame):
 		chan=self.spinChannel.GetValue()
 		self.fluidsynth.activeChannel = chan	
 
+
 	# reset (all notes off)
 	def onClickPanic(self, event):
 		self.fluidsynth.panic()
 
 
+	# on shutdown
+	def onClose(self,event=None):
+		self.takePreferenceSnapshot()
+		self.storeDataFile() # store GUI state, will restore on load
+		if event != None:
+			event.Skip() # continue shutdown
+
+
+	###########################################################################
 	# api ...
+	###########################################################################
 
 	# proxy
 	def cmd(self,s,non_blocking=False):
 		return self.fluidsynth.cmd(s,non_blocking)	
+
+
+	# load new dir
+	def changeDir(self, path):
+		if ( os.path.isdir(path) ):
+			self.dir = path
+			self.drawSoundFontList()
+
+
+	# refresh list of soundfonts
+	# expects: changeDir should be called first 
+	def drawSoundFontList(self,cache=False):
+		if not cache:
+			self.soundFontsAll = os.listdir(self.dir)
+
+		self.soundFonts = self.filterSoundFont()
+		self.listSoundFont.Set(self.soundFonts)
+
+		self.drawInstrumentList(0);
+
+
+	# change soundfont in fluid synth 
+	def setSoundFont(self, path):
+
+		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
+		self.instrumentsAll = instrumentsAll
+		self.instruments = self.filterInstruments()
+
+		# select item if not already
+		fontName = os.path.basename(path) 
+		idx = self.soundFonts.index(fontName)
+		if idx != -1 and idx != self.listSoundFont.GetSelection():
+			# visually select font in list if needed
+			self.listSoundFont.SetSelection(idx)
+
+		#self.setInstrumentByIdx(0) # already initalized
+		self.drawInstrumentList(0);
+
+
+	# refresh entire list of instruments  
+	# this is always drawn from cache
+	# expects: setSoundFont should be called first
+	def drawInstrumentList(self,selectedIdx=None):
+		if selectedIdx != None: 
+			self.instrumentsIdx = selectedIdx
+		self.listInstruments.Set(self.instruments)
+		self.listInstruments.SetSelection(self.instrumentsIdx)
+
+
+	# change the instrument in fluidsynth
+	# this does NOT redraw the list of all instruments
+	# like setInstrumentByName but accepts a named instrument, for example
+	#    000-000 Dark Violins  
+	# expects: setSoundFont is called first 
+	def setInstrumentByName(self,instrumentName):
+
+		if instrumentName == '':
+			raise Exception("instrument name blank")
+
+		idx = self.instrumentsIdx
+		try:
+			idx = self.instruments.index(instrumentName)
+			self.instrumentsIdx = idx
+		except:
+			print "error: did not resolve name->id for setInstrumentByName"
+			print "    for name:  '" + instrumentName + "'"
+
+		# visually select instrument in list if needed
+		if idx != self.listInstruments.GetSelection():
+			self.listInstruments.SetSelection(idx)
+
+		return self.fluidsynth.setInstrument(instrumentName)	
+
+
+	# like setInstrumentByName, but by list box index
+	# expects: setSoundFont should be called first
+	def setInstrumentByIdx(self,selectedIdx=None):
+		if selectedIdx != None:
+			idx = self.incInstrument( selectedIdx, 0 )
+			self.instrumentsIdx = idx
+
+		instrumentName = self.instruments[self.instrumentsIdx]
+		return self.setInstrumentByName(instrumentName)	
+
 
 	# keep scrolling id in bounds
 	def incInstrument(self,id,add=0):
@@ -1042,6 +1423,7 @@ class FluidSynthGui(wx.Frame):
 			id = size - 1
 		return id
 
+
 	# search 
 	def grep(self, pattern, word_list):
 		expr = re.compile(pattern, re.IGNORECASE)
@@ -1049,20 +1431,14 @@ class FluidSynthGui(wx.Frame):
 
 
 	def filterSoundFont(self):
-		lst = self.grep(self.textfilterSoundFont.GetValue(),self.soundFontsAll);
+		lst = self.grep(self.textFilterSoundFont.GetValue(),self.soundFontsAll);
 		return sorted(lst, key=lambda s: s.lower())
 
 
 	def filterInstruments(self):
+		# no search filter currently
 		return self.instrumentsAll;
 
-	def loadInstrument(self):
-		idx = self.incInstrument( self.instrumentsIdx, 0 )
-		sel = self.instruments[idx]
-		#print "- select " + str(idx) + " " + sel
-		self.fluidsynth.setInstrument(sel)	
-
-	# view...
 
 	# enable/disable fx widgets
 	def enableReverbControls(self,enabled):
@@ -1071,30 +1447,14 @@ class FluidSynthGui(wx.Frame):
 		self.sReverbWidth.Enable(enabled)
 		self.sReverbLevel.Enable(enabled)
 
+
 	# enable/disable fx widgets
 	def enableChorusControls(self,enabled):
-		self.sChorusN.Enable(enabled)
+		self.sChorusNR.Enable(enabled)
 		self.sChorusLevel.Enable(enabled)
 		self.sChorusSpeed.Enable(enabled)
 		self.sChorusDepth.Enable(enabled)
 
-	# draw soundfonts 
-	def refreshSoundFonts(self,cache=False):
-		if not cache:
-			self.soundFontsAll = os.listdir(self.dir)
-
-		self.soundFonts = self.filterSoundFont()
-		self.listSoundFont.Set(self.soundFonts)
-
-		self.instrumentsIdx = 0;
-		self.refreshInstruments();
-
-
-	# draw instruments
-	def refreshInstruments(self):
-		self.instruments = self.filterInstruments()
-		self.listInstruments.Set(self.instruments)
-		self.listInstruments.SetSelection(self.instrumentsIdx)
 
 # end class
 
@@ -1102,21 +1462,27 @@ class FluidSynthGui(wx.Frame):
 # main
 if __name__ == '__main__':
 
-	# parse cli options 
-	parser = optparse.OptionParser()
-	parser.add_option('-d', '--dir', action="store", dest="dir",
-		help="load a sf2 directory", default="") 
-	parser.add_option('-c', '--cmd', action="store", dest="fluidsynthcmd", 
-		help="use a custom command to start fluidsynth server", default="") 
-	options, args = parser.parse_args()
+	try:
+		# parse cli options 
+		parser = optparse.OptionParser()
+		parser.add_option('-d', '--dir', action="store", dest="dir",
+			help="load a sf2 directory", default="") 
+		parser.add_option('-c', '--cmd', action="store", dest="fluidsynthcmd", 
+			help="use a custom command to start fluidsynth server", default="") 
+		options, args = parser.parse_args()
 
-	# init api
-	fluidsynth = FluidSynthApi(options,args)
+		# init api
+		fluidsynth = FluidSynthApi(options,args)
 
-	# wrap api with gui
-	app = wx.App()
-	FluidSynthGui(None, title='Fluid Synth Gui',api=fluidsynth)
-	app.MainLoop()
+		# wrap api with gui
+		app = wx.App(clearSigInt=True)
+		gui = FluidSynthGui(None, title='Fluid Synth Gui',api=fluidsynth)
+		app.MainLoop()
 
+	except Exception, e:
+		print "exiting..."
+		print e
 
 # end main
+
+
