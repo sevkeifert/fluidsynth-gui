@@ -349,6 +349,7 @@ class FluidSynthApi:
 
 	# parser utils
 	def isTruthy(self,value):
+		value = value.lower()
 		if value in ["true","1","on","yes"]:
 			return True
 		return False
