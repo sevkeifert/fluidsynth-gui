@@ -74,8 +74,10 @@
 #
 # Classes defined below:
 #
-#	FluidSynthApi - this is the core api/application.
-#	FluidSynthGui - this is the graphical interface; it wraps the api.
+#	FluidSynthApi - this is the core api that interfaces with fluidsynth
+#                   using the socket api.
+#	FluidSynthGui - the graphical interface wraps the api and saves the state
+#                   of the application on shutdown.
 #
 
 import sys 
