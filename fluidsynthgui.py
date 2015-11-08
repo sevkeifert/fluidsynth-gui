@@ -3,17 +3,17 @@
 # Kevin Seifert - GPL 2015
 #
 #
-# This program creates a simple synthesizer interface for fluidsynth.
+# This program creates a simple synthesizer interface for FluidSynth.
 # This lets you easily cycle through a large set of sound fonts
 # and select instruments.
 #
-# This program just runs the fluidsynth command line program, sending 
+# This program just runs the FluidSynth command line program, sending 
 # input, and parsing output.  
 #
 #
 # How to use the graphical user interface:
 #     1. select a folder that contains *.sf2 files
-#     2. Up/Down arrows will cycle through the soundfont files
+#     2. Up/Down arrows will cycle through the SoundFont files
 #     3. Left/Right arrows will cycle through the instruments in each file
 #     4. You can filter the sound fonts listed (search box at bottom) 
 #     5. Optional: you can set the midi channel you want to use (default = 1) 
@@ -24,28 +24,28 @@
 # Command line options:
 #
 #    	-d sf2_dir                  the default path to your sound fonds 
-#    	-f fluidsynth_command       override the start command 
-#	    any additional args         are executed as commands in fluidsynth
+#    	-f FluidSynth_command       override the start command 
+#	    any additional args         are executed as commands in FluidSynth
 #
 #   For example:
 #
 #       python  fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
 #
-# To connect a CLI to a runninng fluidsynth process, you can use netcat:
+# To connect a CLI to a runninng FluidSynth process, you can use netcat:
 #
 #    nc localhost 9800
 #
 #
 # System Requirements:
 #	jack (QjackCtl recommended)
-#	fluidsynth (you should configure for command line first)
+#	FluidSynth (you should configure for command line first)
 #	Python 2.7+
 #	python-wxgtk2.8+
 #
 # Tested with: xubuntu 14.04, FluidSynth version 1.1.6
 #
 #
-# All Fluidsynth command definitions that are used:
+# All FluidSynth command definitions that are used:
 #
 #   echo                        Echo data back 
 #   load file                   Load SoundFont 
@@ -96,8 +96,8 @@ import json
 class FluidSynthApi:
 
 	def __init__(self,options,args):
-		# start fluidsynth process
-		print "Init fluidsynth api..."
+		# start FluidSynth process
+		print "Init FluidSynth api..."
 
 		# cli
 		self.options = options
@@ -108,10 +108,10 @@ class FluidSynthApi:
 		self.fontFilesLoaded={}      # font_id: font_file
 		self.fontsInUse=[-1] * 16    # font_id.  position is channel
 		self.instrumentsInUse=[""] * 16  # instrument_name.  position is channel
-		self.activeChannel = 1       # base 1.  all new instruments load here
-		self.lastChannel = 1         # base 1. last channel loaded 
+		self.selectedChannel = 1     # base 1.  all new instruments load here
+		self.activeChannel = 1       # base 1. last channel loaded 
 		self.activeSoundFontId = -1  # last font loaded
-		self.activeSoundFontFile = ''    # last soundfont loaded
+		self.activeSoundFontFile = ''# last SoundFont loaded
 		self.activeInstrument = ''   # last instrument loaded
 
 		# socket io settings
@@ -119,21 +119,21 @@ class FluidSynthApi:
 		self.port=9800
 		self.buffsize=4096
 		self.readtimeout=2 # sec
-		self.fluidsynth = None # the fluidsynth process
+		self.fluidsynth = None # the FluidSynth process
 
 		# see `man fluidsynth` for explanation of cli options
-		self.fluidsynthcmd = "fluidsynth -sli -g5 -C0 -R0"
+		self.fluidsynthCmd = "fluidsynth -sli -g5 -C0 -R0"
 
 		# arbitrary text to mark the end of stream from fluidsynth
 		self.eof = "."  
 		self.debug = True 
 
 		# cli option overrides
-		if ( options.fluidsynthcmd != "" ):
-			self.fluidsynthcmd = options.fluidsynthcmd
+		if ( options.fluidsynthCmd != "" ):
+			self.fluidsynthCmd = options.fluidsynthCmd
 
 		# set up/test server
-		self.initFluidsynth()
+		self.initFluidSynth()
 
 		# process command line args passed to fluid synth
 		if len(self.args) > 0:
@@ -142,11 +142,11 @@ class FluidSynthApi:
 
 
 	def __del__(self):
-		self.closeFluidsynth()
+		self.closeFluidSynth()
 
 
 	# test/initialize connection to fluidsynth
-	def initFluidsynth(self):
+	def initFluidSynth(self):
 
 		try:
 			self.connect()
@@ -154,15 +154,15 @@ class FluidSynthApi:
 			return True
 
 		except Exception,e:
-			print "error: fluidsynth not running?"
+			print "error: FluidSynth not running?"
 			print "could not connect to socket: " + str(self.port)
 			print e
 
 		try:
 			# try starting fluidsynth
 			print "trying to start fluidsynth ..."
-			print self.fluidsynthcmd
-			cmd = self.fluidsynthcmd.split()
+			print self.fluidsynthCmd
+			cmd = self.fluidsynthCmd.split()
 			self.fluidsynth = subprocess.Popen(cmd, shell=False, 
 				stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
@@ -190,7 +190,7 @@ class FluidSynthApi:
 
 
 	# cleanup
-	def closeFluidsynth(self):
+	def closeFluidSynth(self):
 		self.close()
 		try:
 			self.fluidsynth.kill()
@@ -201,7 +201,7 @@ class FluidSynthApi:
 	# create socket connection
 	# NOTE: do NOT connect on every request (like HTTP)
 	# fluidsynth seems to only be able to spawn a small number of total sockets.
-	# reuse the same socket connection for all IO, or you will run out of 
+	# reuse the same socket connection for all io, or you will run out of 
 	# fluidsynth threads.
 	def connect(self):
 
@@ -364,11 +364,14 @@ class FluidSynthApi:
 
 
 	# channel control
-	def setActiveChannel(self,channel):
-		self.activeChannel = channel	
+	def setSelectedChannel(self,channel):
+		self.selectedChannel = int(channel)
 
-	def getActiveChannel(self,channel):
-		return self.activeChannel
+	def getSelectedChannel(self):
+		return self.selectedChannel
+
+	def getSelectedChannel0(self):
+		return self.selectedChannel-1
 
 
 	# load sound soundfont, for example:
@@ -510,7 +513,7 @@ class FluidSynthApi:
 		try:
 			parts = instrumentName.split()
 			ids = parts[0].split('-')			
-			chan0 = str(self.activeChannel-1) # convert base 0
+			chan0 = str(self.getSelectedChannel0()) # convert base 0
 			font = str(self.activeSoundFontId)
 			bank = ids[0]
 			prog = ids[1]
@@ -520,7 +523,7 @@ class FluidSynthApi:
 			self.activeInstrument = instrumentName
 			self.fontsInUse[int(chan0)] = int(font)
 			self.instrumentsInUse[int(chan0)] = instrumentName 
-			self.lastChannel = self.activeChannel
+			self.activeChannel = self.getSelectedChannel()
 
 			return data
 
@@ -631,14 +634,20 @@ class FluidSynthApi:
 
 
 # GUI
-# Expected order of user events
+#
+# Expected order of events
+#
 #	1. load dir
-#	2. optional: filter list
-#	3. optional: change channel 
+#	2. optional: filter list of fonts
+#	3. optional: change selected channel 
 # 	4. load sound font
 # 	5. load instruments
 #	6. select instrument
 #	7. adjust levels 
+#
+# the gui manages all persistence of the interface.
+# anything in self.data will be written to:
+#    ~/.fluidsynth-gui/data.json
 class FluidSynthGui(wx.Frame):
 
 	def __init__(self, parent, title, api):
@@ -650,7 +659,7 @@ class FluidSynthGui(wx.Frame):
 
 		self.soundFontsAll = [] # everything in dir 
 		self.soundFonts = [] # filtered
-		self.instrumentsAll = [] # everything in current soundfont
+		self.instrumentsAll = [] # everything in current soundFont
 		self.instruments = [] # filtered
 		self.soundFontsIdx = 0
 		self.instrumentsIdx = 0
@@ -663,6 +672,7 @@ class FluidSynthGui(wx.Frame):
 		#self.snapshotFile = self.dataDir + "/jacksnapshot" # jack connections
 
 		# what components will be persistent?
+		# anything in this list will be automatically serialized
 		self.saveUiState = [
 				"textSoundFontDir",
 				"textFilterSoundFont",
@@ -683,13 +693,13 @@ class FluidSynthGui(wx.Frame):
 				"spinChannel",
 		]
 
-		self.saveFluidsynthState = [
+		self.saveFluidSynthState = [
 				"fontsInUse",
 				"instrumentsInUse",
 				"fontFilesLoaded",
-				"activeChannel",
+				"selectedChannel",
 				"activeInstrument",
-				"lastChannel",
+				"activeChannel",
 				"activeSoundFontId",
 				"activeSoundFontFile",
 		]
@@ -706,7 +716,7 @@ class FluidSynthGui(wx.Frame):
 
 
 	###########################################################################
-	# data utilities ...
+	# persistent data utilities ...
 	###########################################################################
 
 	# process command line args
@@ -782,7 +792,7 @@ class FluidSynthGui(wx.Frame):
 					self.unsetData(prop)
 
 			# save api properties
-			for prop in self.saveFluidsynthState: 
+			for prop in self.saveFluidSynthState: 
 				try:
 					obj = getattr(self.fluidsynth, prop)
 					self.setData(prop,obj)
@@ -836,8 +846,8 @@ class FluidSynthGui(wx.Frame):
 			fontsInUse = self.getData("fontsInUse")	 # overall map 
 			fontFilesLoaded = self.getData("fontFilesLoaded")			
 			instrumentsInUse = self.getData("instrumentsInUse")	
+			selectedChannel = self.getData("selectedChannel") # base 1
 			activeChannel = self.getData("activeChannel") # base 1
-			lastChannel = self.getData("lastChannel") # base 1
 			activeSoundFontFile = self.getData("activeSoundFontFile")
 			activeInstrument = self.getData("activeInstrument")
 
@@ -865,17 +875,18 @@ class FluidSynthGui(wx.Frame):
 					print "error: missing instrument data"
 					continue
 
-				if channel == lastChannel and font == activeSoundFontFile and instrument == activeInstrument:
+				if channel == activeChannel and font == activeSoundFontFile and instrument == activeInstrument:
 					print "found primary font"	
 					continue
 
-				self.fluidsynth.setActiveChannel(channel)
+				self.fluidsynth.setSelectedChannel(channel)
 				self.fluidsynth.loadSoundFont(font)
 				self.fluidsynth.setInstrument(instrument)
 
 			# restore primary active channel
+			# note: ignoring last selectedChannel if it was unused.
 			print "restore active channel: " + str(activeChannel)
-			self.fluidsynth.setActiveChannel(activeChannel)
+			self.fluidsynth.setSelectedChannel(activeChannel)
 
 			# restore primary font
 			if activeSoundFontFile != '':
@@ -1304,8 +1315,8 @@ class FluidSynthGui(wx.Frame):
 
 	# channel
 	def onClickChannel(self,event):
-		chan=self.spinChannel.GetValue()
-		self.fluidsynth.activeChannel = chan	
+		channel = self.spinChannel.GetValue()
+		self.fluidsynth.selectedChannel = channel
 
 
 	# reset (all notes off)
@@ -1349,7 +1360,7 @@ class FluidSynthGui(wx.Frame):
 		self.drawInstrumentList(0);
 
 
-	# change soundfont in fluid synth 
+	# change soundFont in fluid synth 
 	def setSoundFont(self, path):
 
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
@@ -1467,8 +1478,8 @@ if __name__ == '__main__':
 		parser = optparse.OptionParser()
 		parser.add_option('-d', '--dir', action="store", dest="dir",
 			help="load a sf2 directory", default="") 
-		parser.add_option('-c', '--cmd', action="store", dest="fluidsynthcmd", 
-			help="use a custom command to start fluidsynth server", default="") 
+		parser.add_option('-c', '--cmd', action="store", dest="fluidsynthCmd", 
+			help="use a custom command to start FluidSynth server", default="") 
 		options, args = parser.parse_args()
 
 		# init api
@@ -1476,7 +1487,7 @@ if __name__ == '__main__':
 
 		# wrap api with gui
 		app = wx.App(clearSigInt=True)
-		gui = FluidSynthGui(None, title='Fluid Synth Gui',api=fluidsynth)
+		gui = FluidSynthGui(None, title='FluidSynth Gui v1.0',api=fluidsynth)
 		app.MainLoop()
 
 	except Exception, e:
