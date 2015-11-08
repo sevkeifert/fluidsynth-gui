@@ -384,13 +384,15 @@ class FluidSynthApi:
 	#fluidsynth: warning: No preset found on channel 9 [bank=128 prog=0]
 	#> 
 	def loadSoundFont(self, sf2Filename):
+
 		try:
 			data = self.cmd('load "'+ sf2Filename +'"')
+
 			# parse sound font id
 			ids = [int(s) for s in data.split() if s.isdigit()]	
-			id = ids[-1] # return last item
-			id = int(id)
-			if id > -1:
+			if len(ids) > 0:
+				id = ids[-1] # return last item
+				id = int(id)
 				self.fontFilesLoaded[id] = sf2Filename # store mapping id->file
 				self.activeSoundFontId = id
 				self.activeSoundFontFile = sf2Filename
@@ -553,9 +555,10 @@ class FluidSynthApi:
 		try:
 			self.unloadSoundFonts()
 			id = self.loadSoundFont(sf2)
-			voices = self.getInstruments(id)
-			self.setInstrument(voices[0])
-			return (id,voices)
+			if id > -1:
+				voices = self.getInstruments(id)
+				self.setInstrument(voices[0])
+				return (id,voices)
 
 		except Exception,e:
 			print "error: font and instrument did not load: " + sf2
