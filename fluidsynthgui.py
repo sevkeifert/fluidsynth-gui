@@ -1326,11 +1326,11 @@ class FluidSynthGui(wx.Frame):
 		path = self.getSelectedPath()
 	
 		keycode = event.GetKeyCode()
-		if keycode == wx.WXK_LEFT:
+		if keycode in [ wx.WXK_LEFT, wx.WXK_NUMPAD_LEFT ]:
 			idx = self.incInstrument(self.instrumentsIdx,-1)
 			self.setInstrumentByIdx(idx)
 			self.drawInstrumentList()
-		elif keycode == wx.WXK_RIGHT:
+		elif keycode in [ wx.WXK_RIGHT, wx.WXK_NUMPAD_RIGHT ]:
 			idx = self.incInstrument(self.instrumentsIdx,1)
 			self.setInstrumentByIdx(idx)
 			self.drawInstrumentList()
