@@ -1495,6 +1495,7 @@ if __name__ == '__main__':
 	except Exception, e:
 		print "exiting..."
 		print e
+		traceback.print_exc()
 
 # end main
 
