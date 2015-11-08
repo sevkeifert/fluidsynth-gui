@@ -15,7 +15,9 @@
 #     1. select a folder that contains *.sf2 files
 #     2. Up/Down arrows will cycle through the SoundFont files
 #     3. Left/Right arrows will cycle through the instruments in each file
-#     4. You can filter the sound fonts listed (search box at bottom) 
+#     4. You can filter the sound fonts listed (search box at bottom).
+#        Also, you can type the filter while the soundfont list has focus.
+#        The search box accepts regular expressions as well.  .* is a wildcard 
 #     5. Optional: you can set the midi channel you want to use (default = 1) 
 #     6. Optional: on the second tab, you can set levels for gain, reverb, 
 #         and chorus.
@@ -590,7 +592,7 @@ class FluidSynthApi:
 		return value 
 
 	def setReverb(self,boolean):
-		self.cmd('reverb ' + str(int(boolean)))
+		self.cmd('reverb ' + str(int(boolean)),True)
 		# ? not auto updated
 		self.setValue('synth.reverb.active', str(int(boolean))) 
 	def setReverbRoomSize(self,num):
@@ -616,7 +618,7 @@ class FluidSynthApi:
 		return value 
 
 	def setChorus(self,boolean):
-		self.cmd('chorus ' + str(int(boolean)))
+		self.cmd('chorus ' + str(int(boolean)),True)
 		# ? not auto updated
 		self.setValue('synth.chorus.active', str(int(boolean))) 
 
@@ -835,15 +837,7 @@ class FluidSynthGui(wx.Frame):
 			# trigger change on all level controls to sync api
 			self.onScrollGain()
 			self.onClickEnableReverb()
-			self.onScrollReverbDamp()
-			self.onScrollReverbRoomSize()
-			self.onScrollReverbWidth()
-			self.onScrollReverbLevel()
 			self.onClickEnableChorus()
-			self.onScrollChorusNR()
-			self.onScrollChorusLevel()
-			self.onScrollChorusSpeed()
-			self.onScrollChorusDepth()
 
 			# restore core api properties manually...
 
@@ -1204,6 +1198,13 @@ class FluidSynthGui(wx.Frame):
 		self.fluidsynth.setReverb(value)	
 		self.enableReverbControls(value)
 
+		# sync api to sliders
+		if value:
+			self.onScrollReverbDamp()
+			self.onScrollReverbRoomSize()
+			self.onScrollReverbWidth()
+			self.onScrollReverbLevel()
+
 
 	def onScrollReverbDamp(self,event=None):
 		value = self.sReverbDamp.GetValue()
@@ -1234,6 +1235,13 @@ class FluidSynthGui(wx.Frame):
 		value = self.cbEnableChorus.GetValue()
 		self.fluidsynth.setChorus(value)
 		self.enableChorusControls(value)
+
+		# sync api to sliders
+		if value:
+			self.onScrollChorusNR()
+			self.onScrollChorusLevel()
+			self.onScrollChorusSpeed()
+			self.onScrollChorusDepth()
 
 
 	def onScrollChorusNR(self,event=None):
