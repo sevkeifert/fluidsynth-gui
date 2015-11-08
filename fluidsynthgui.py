@@ -808,6 +808,10 @@ class FluidSynthGui(wx.Frame):
 					print "remove property causing error: " + prop
 					self.unsetData(prop)
 
+			# avoid leaving spaces in search filter
+			search = self.getData("textFilterSoundFont").strip(" \t\n\r") 
+			self.setData("textFilterSoundFont",search)
+
 		except Exception, e:
 			print "error: could not take snapshot of preferences"
 			print e
@@ -1334,16 +1338,42 @@ class FluidSynthGui(wx.Frame):
 			if path != None and os.path.isdir(path):
 				# navigate to the new dir
 				self.changeDir(path,True)
-#		else:
-#				a = chr(keycode)
-					
+		elif keycode in [ wx.WXK_BACK, wx.WXK_DELETE ]: 
+
+			# backspace search filter
+			try:
+				search = self.textFilterSoundFont.GetValue()
+				search = search[:-1]
+				self.textFilterSoundFont.SetValue(search)
+				self.onKeyUpFilterSoundFont()
+			except Exception, e:
+				print e
+				pass
+			
+		elif keycode > 32 and keycode < 128:
+
+			# use supplied some type of ascii data.  
+			# update search filter
+			a = '' 
+			try:
+				a = chr(keycode).lower()
+				search = self.textFilterSoundFont.GetValue()
+				search += a
+				self.textFilterSoundFont.SetValue(search)
+				self.onKeyUpFilterSoundFont()
+			except Exception, e:
+				print e
+				pass
+
+	
 		event.Skip()
 
 
-	# filters
-	def onKeyUpFilterSoundFont(self,event):
+	# search filter
+	def onKeyUpFilterSoundFont(self,event=None):
 		self.drawSoundFontList(True)
-		event.Skip()
+		if event != None:
+			event.Skip()
 
 
 	# channel
@@ -1440,17 +1470,17 @@ class FluidSynthGui(wx.Frame):
 
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
 		if id == -1:
-			instrumentsAll = ["error: could not load as .sf2 file"]
+			instrumentsAll = ["Error: could not load as .sf2 file"]
 
 		self.instrumentsAll = instrumentsAll
 		self.instruments = self.filterInstruments()
 
 		fontName = os.path.basename(path) 
-		idx = self.soundFonts.index(fontName)
-		if id != -1 and idx != -1 and idx != self.listSoundFont.GetSelection():
+		selIdx = self.soundFonts.index(fontName)
+		if id != -1 and selIdx != -1 and selIdx != self.listSoundFont.GetSelection():
 			# select item if not already
 			# visually select font in list if needed
-			self.listSoundFont.SetSelection(idx)
+			self.listSoundFont.SetSelection(selIdx)
 
 		#self.setInstrumentByIdx(0) # already initalized
 		self.drawInstrumentList(0);
