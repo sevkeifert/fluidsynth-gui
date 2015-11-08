@@ -373,6 +373,7 @@ class FluidSynthApi:
 	def getSelectedChannel(self):
 		return self.selectedChannel
 
+	# 0-based for fluidsynth
 	def getSelectedChannel0(self):
 		return self.selectedChannel-1
 
@@ -872,6 +873,7 @@ class FluidSynthGui(wx.Frame):
 				print "	channel: " + str(channel) 
 				print "	font: " + str(font) 
 				print "	instrument: " + str(instrument) 
+				print "--"
 
 				if font == '':
 					print "error: missing font data"
@@ -1155,6 +1157,7 @@ class FluidSynthGui(wx.Frame):
 		self.btnSoundFontDir.Bind(wx.EVT_BUTTON, self.onClickButtonBrowse, self.btnSoundFontDir)
 		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpDirectory, self.textSoundFontDir)
 		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.onSelectSoundFont, self.listSoundFont)
+		self.listSoundFont.Bind(wx.EVT_LISTBOX_DCLICK, self.onDblClickSoundFont, self.listSoundFont)
 		self.listSoundFont.Bind(wx.wx.EVT_KEY_DOWN, self.onKeyDownSoundFont, self.listSoundFont)
 		self.listInstruments.Bind(wx.EVT_LISTBOX, self.onSelectInstrument,self.listInstruments)
 		self.textFilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpFilterSoundFont,self.textFilterSoundFont)
@@ -1277,20 +1280,25 @@ class FluidSynthGui(wx.Frame):
 	# sound soundfont change
 	def onSelectSoundFont(self, event=None):
 
-		idx = self.listSoundFont.GetSelection()
-		if ( idx < 0 ):
-			return
+		path = self.getSelectedPath()
 
-		sel = self.soundFonts[idx]
-		path = self.dir + '/' + sel
-
-		self.instruments = [] # refresh list 
-		if os.path.isdir(path):
-			# navigate to the new dir
-			self.changeDir(path,True)
-		else:
-			# try to open as sf2
+		if not os.path.isdir(path):
+			# automatically try to open file as sf2
+			self.instruments = [] # refresh list 
 			self.setSoundFont(path)
+		
+		if event != None:
+			event.Skip()
+
+
+	# allow changing directory if shown in sound font listing
+	def onDblClickSoundFont(self, event=None):
+
+		path = self.getSelectedPath()
+		if os.path.isdir(path):
+			# open directories
+			self.instruments = [] # refresh list 
+			self.changeDir(path,True)
 		
 		if event != None:
 			event.Skip()
@@ -1309,9 +1317,11 @@ class FluidSynthGui(wx.Frame):
 			event.Skip()
 
 
+	# key navigation on sound font list
 	def onKeyDownSoundFont(self, event):
+		path = self.getSelectedPath()
+	
 		keycode = event.GetKeyCode()
-		event.Skip()
 		if keycode == wx.WXK_LEFT:
 			idx = self.incInstrument(self.instrumentsIdx,-1)
 			self.setInstrumentByIdx(idx)
@@ -1320,6 +1330,12 @@ class FluidSynthGui(wx.Frame):
 			idx = self.incInstrument(self.instrumentsIdx,1)
 			self.setInstrumentByIdx(idx)
 			self.drawInstrumentList()
+		elif keycode == wx.WXK_RETURN: 
+			if path != None and os.path.isdir(path):
+				# navigate to the new dir
+				self.changeDir(path,True)
+
+		event.Skip()
 
 
 	# filters
@@ -1355,6 +1371,25 @@ class FluidSynthGui(wx.Frame):
 	def cmd(self,s,non_blocking=False):
 		return self.fluidsynth.cmd(s,non_blocking)	
 
+
+	# what sound font is actively selected?
+	def getSelectedPath(self):
+
+		try:
+			idx = self.listSoundFont.GetSelection()
+			if ( idx < 0 ):
+				return
+
+			selected = self.soundFonts[idx]
+			path = self.dir + '/' + selected
+
+			return path
+
+		except Exception, e:
+			print e
+			pass
+
+		return ''
 
 	# load new dir
 	def changeDir(self, path, clearSearchFilter=False):
@@ -1395,10 +1430,7 @@ class FluidSynthGui(wx.Frame):
 	# change soundFont in fluid synth 
 	def setSoundFont(self, path):
 
-		print "hit"
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
-
-		print "id: " + str(id) 
 		if id == -1:
 			instrumentsAll = ["error: could not load as .sf2 file"]
 
