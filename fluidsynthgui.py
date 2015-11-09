@@ -673,6 +673,7 @@ class FluidSynthGui(wx.Frame):
 		self.soundFontsIdx = 0
 		self.instrumentsIdx = 0
 		self.soundFontsFilter = "" 
+		self.dir = '' # working dir
 	
 		# persistent data
 		self.data = {}
@@ -1436,7 +1437,11 @@ class FluidSynthGui(wx.Frame):
 
 		path = os.path.realpath(path) # cannonical form
 		if not os.path.isdir(path):
-			print "error: not a directory: " + path
+			print "info: not a directory: " + path
+			return
+
+		if self.dir == path:
+			# no change.  we're already there
 			return
 
 		self.dir = path
