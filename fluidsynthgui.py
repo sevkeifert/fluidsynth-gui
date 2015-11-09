@@ -14,7 +14,9 @@
 #     3. Left/Right arrows will cycle through the instruments in each file
 #     4. You can filter the sound fonts listed (search box at bottom).
 #        Also, you can type the filter while the soundfont list has focus.
-#        The search box accepts regular expressions as well.  .* is a wildcard 
+#        Also any SPACE will be translated to a wildcard.
+#        Press ESCAPE to clear the search filter.
+#        The search box can regular expressions as well. use --regex switch 
 #     5. Optional: you can set the midi channel you want to use (default = 1) 
 #     6. Optional: on the second tab, you can set levels for gain, reverb, 
 #         and chorus.
@@ -555,16 +557,6 @@ class FluidSynthApi:
 
 	# load soundfont, select first program voice
 	# returns (id,array_of_voices)
-	#
-	# for example:
-	#> inst 2
-	#000-000 FF Brass 1
-	#000-001 Orchestral Brass 1
-	#000-002 Trumpets
-	#000-003 Trombones
-	#000-004 Trumpets+Trombones
-	#000-005 RolandMcArthurBrs
-	#> 
 	def initSoundFont(self,sf2):
 		try:
 			self.unloadSoundFonts()
@@ -685,6 +677,7 @@ class FluidSynthGui(wx.Frame):
 		self.instrumentsIdx = 0
 		self.soundFontsFilter = "" 
 		self.dir = '' # working dir
+		self.regex = False # use reg ex in search filter
 	
 		# persistent data
 		self.data = {}
@@ -748,6 +741,8 @@ class FluidSynthGui(wx.Frame):
 			self.dir = options.dir
 			self.textSoundFontDir.SetValue(self.dir)
 			self.drawSoundFontList()
+
+		self.regex = options.regex
 
 
 	# getter/setter for persistent data
@@ -1163,18 +1158,19 @@ class FluidSynthGui(wx.Frame):
 	# note: this lists out all controls and events in one place.
 	def bindEvents(self):
 
-		# sound fonts
+		# sound font page
 		self.btnSoundFontDir.Bind(wx.EVT_BUTTON, self.onClickButtonBrowse, self.btnSoundFontDir)
 		self.textSoundFontDir.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpDirectory, self.textSoundFontDir)
 		self.listSoundFont.Bind(wx.EVT_LISTBOX, self.onSelectSoundFont, self.listSoundFont)
 		self.listSoundFont.Bind(wx.EVT_LISTBOX_DCLICK, self.onDblClickSoundFont, self.listSoundFont)
-		self.listSoundFont.Bind(wx.wx.EVT_KEY_DOWN, self.onKeyDownSoundFont, self.listSoundFont)
+		self.listSoundFont.Bind(wx.wx.EVT_CHAR, self.onKeyDownSoundFont, self.listSoundFont)
 		self.listInstruments.Bind(wx.EVT_LISTBOX, self.onSelectInstrument,self.listInstruments)
+		self.listInstruments.Bind(wx.wx.EVT_CHAR, self.onKeyDownInstrument, self.listInstruments)
 		self.textFilterSoundFont.Bind(wx.wx.EVT_KEY_UP, self.onKeyUpFilterSoundFont,self.textFilterSoundFont)
 		self.spinChannel.Bind(wx.EVT_SPINCTRL,self.onClickChannel,self.spinChannel)
 		self.btnPanic.Bind(wx.EVT_BUTTON, self.onClickPanic, self.btnPanic)
 
-		# levels 
+		# levels page 
 		self.sGain.Bind(wx.EVT_SLIDER,self.onScrollGain)
 
 		self.cbEnableReverb.Bind(wx.EVT_CHECKBOX,self.onClickEnableReverb)
@@ -1242,7 +1238,7 @@ class FluidSynthGui(wx.Frame):
 		self.fluidsynth.setReverbLevel(value) 
 
 
-	# chorus
+	# chorus change
 	def onClickEnableChorus(self,event=None):
 		value = self.cbEnableChorus.GetValue()
 		self.fluidsynth.setChorus(value)
@@ -1281,11 +1277,13 @@ class FluidSynthGui(wx.Frame):
 
 
 	# dir change
-	def onKeyUpDirectory(self, event):
-		keycode = event.GetKeyCode()
+	def onKeyUpDirectory(self, event=None):
+		# must be key up to read full text from input
+		#keycode = event.GetKeyCode()
 		path = self.textSoundFontDir.GetValue()
-		self.changeDir(path,True)
-		event.Skip()
+		self.changeDir(path,True,True)
+		if event != None:
+			event.Skip()
 
 
 	def onClickButtonBrowse(self, event):
@@ -1341,26 +1339,35 @@ class FluidSynthGui(wx.Frame):
 			event.Skip()
 
 
-	# key navigation on sound font list
-	def onKeyDownSoundFont(self, event):
-		path = self.getSelectedPath()
-	
+	# shared bindings
+	def onKeyDownListBoxes(self, event):
 		keycode = event.GetKeyCode()
 		if keycode in [ wx.WXK_LEFT, wx.WXK_NUMPAD_LEFT ]:
-			idx = self.incInstrument(self.instrumentsIdx,-1)
-			self.setInstrumentByIdx(idx)
-			self.drawInstrumentList()
+			self.incInstrument(-1)
 		elif keycode in [ wx.WXK_RIGHT, wx.WXK_NUMPAD_RIGHT ]:
-			idx = self.incInstrument(self.instrumentsIdx,1)
-			self.setInstrumentByIdx(idx)
-			self.drawInstrumentList()
-		elif keycode == wx.WXK_RETURN: 
+			self.incInstrument(1)
+		elif keycode == wx.WXK_ESCAPE:
+			self.clearSearchFilter(True)
+
+		event.Skip()
+
+
+	# key navigation on sound font list
+	# note: EVT_CHAR contains translated char 
+	def onKeyDownSoundFont(self, event):
+
+		keycode = event.GetKeyCode()
+		path = self.getSelectedPath()
+
+		self.onKeyDownListBoxes(event)
+
+		if keycode == wx.WXK_RETURN: 
 			if path != None and os.path.isdir(path):
 				# navigate to the new dir
 				self.changeDir(path,True)
-		elif keycode in [ wx.WXK_BACK, wx.WXK_DELETE ]: 
 
-			# backspace search filter
+		elif keycode in [ wx.WXK_BACK, wx.WXK_DELETE ]: 
+			# backspace for search filter
 			try:
 				search = self.textFilterSoundFont.GetValue()
 				search = search[:-1]
@@ -1369,14 +1376,14 @@ class FluidSynthGui(wx.Frame):
 			except Exception, e:
 				print e
 				pass
-			
-		elif keycode > 32 and keycode < 128:
 
-			# user supplied some type of ascii data.  
+		elif keycode >= 32 and keycode <= 126:
+
+			# user supplied some type of printable ascii data.  
 			# update search filter
 			a = '' 
 			try:
-				a = chr(keycode).lower()
+				a = chr(keycode)
 				search = self.textFilterSoundFont.GetValue()
 				search += a
 				self.textFilterSoundFont.SetValue(search)
@@ -1385,18 +1392,31 @@ class FluidSynthGui(wx.Frame):
 				print e
 				pass
 
-	
 		event.Skip()
 
 
-	# search filter
-	def onKeyUpFilterSoundFont(self,event=None):
+	# key navigation on instrument list
+	def onKeyDownInstrument(self, event):
+		self.onKeyDownListBoxes(event)
+		event.Skip()
+
+
+	# search filter changed. does not require event input
+	# clear input on ESC 
+	def onKeyUpFilterSoundFont(self, event=None):
+
+		keycode = -1
+		if event != None:
+			keycode = event.GetKeyCode()
+			if keycode == wx.WXK_ESCAPE:
+				self.clearSearchFilter(True)
+
 		self.drawSoundFontList(True)
 		if event != None:
 			event.Skip()
 
 
-	# channel
+	# channel change
 	def onClickChannel(self,event):
 		channel = self.spinChannel.GetValue()
 		self.fluidsynth.selectedChannel = channel
@@ -1443,8 +1463,16 @@ class FluidSynthGui(wx.Frame):
 
 		return ''
 
+
+	# remove filter, force refresh of file listing
+	def clearSearchFilter(self,refresh=False):
+		self.textFilterSoundFont.SetValue('') 
+		if refresh:
+			self.drawSoundFontList(False,True)
+
+
 	# load new dir
-	def changeDir(self, path, clearSearchFilter=False):
+	def changeDir(self, path, clearSearchFilter=False, keepFocus=False):
 
 		path = os.path.realpath(path) # cannonical form
 		if not os.path.isdir(path):
@@ -1458,24 +1486,23 @@ class FluidSynthGui(wx.Frame):
 		self.dir = path
 
 		if clearSearchFilter:
-			# clear filter
-			self.textFilterSoundFont.SetValue('') 
-
-		# sync dir text input
-		if path != self.textSoundFontDir.GetValue():
-			self.textSoundFontDir.SetValue(path) 
+			self.clearSearchFilter()
 
 		self.drawSoundFontList()
 
-		# highlight first item 	
-		if len(self.soundFonts):
-			self.listSoundFont.SetSelection(0)
-			self.listSoundFont.SetFocus()
+		if not keepFocus:
+			# update text input
+			if path != self.textSoundFontDir.GetValue():
+				self.textSoundFontDir.SetValue(path) 
+			# automatically highlight first item in list
+			if len(self.soundFonts):
+				self.listSoundFont.SetSelection(0)
+				self.listSoundFont.SetFocus()
 
 
 	# refresh list of soundfonts
 	# expects: changeDir should be called first 
-	def drawSoundFontList(self,cache=False):
+	def drawSoundFontList(self,cache=False,preserveInstrument=False):
 		if not cache:
 			allFiles = os.listdir(self.dir)
 			# exclude dot files
@@ -1486,7 +1513,8 @@ class FluidSynthGui(wx.Frame):
 		self.soundFonts.insert(0, '..') # add up-dir option
 		self.listSoundFont.Set(self.soundFonts)
 
-		self.drawInstrumentList(0);
+		if not preserveInstrument:
+			self.drawInstrumentList(0);
 
 
 	# change soundFont in fluid synth 
@@ -1550,15 +1578,16 @@ class FluidSynthGui(wx.Frame):
 	# expects: setSoundFont should be called first
 	def setInstrumentByIdx(self,selectedIdx=None):
 		if selectedIdx != None:
-			idx = self.incInstrument( selectedIdx, 0 )
+			idx = self.incInstrumentIdx( selectedIdx, 0 )
 			self.instrumentsIdx = idx
 
 		instrumentName = self.instruments[self.instrumentsIdx]
 		return self.setInstrumentByName(instrumentName)	
 
 
-	# keep scrolling id in bounds
-	def incInstrument(self,id,add=0):
+	
+	# increment scrollign index, keep index in bounds
+	def incInstrumentIdx(self,id,add=0):
 		id+=add
 		if ( id < 0 ):
 			id = 0
@@ -1568,19 +1597,44 @@ class FluidSynthGui(wx.Frame):
 		return id
 
 
+	# manually move active instrument pointer in list
+	def incInstrument(self,direction):
+			idx = self.incInstrumentIdx(self.instrumentsIdx,direction)
+			self.setInstrumentByIdx(idx)
+			self.drawInstrumentList()
+
+
 	# search 
 	def grep(self, pattern, word_list):
 		expr = re.compile(pattern, re.IGNORECASE)
 		return [elem for elem in word_list if expr.search(elem)]
 
 
+	# apply search filter
 	def filterSoundFont(self):
-		lst = self.grep(self.textFilterSoundFont.GetValue(),self.soundFontsAll);
+		pattern = self.textFilterSoundFont.GetValue()
+
+		# whitespace may be confusing since it won't show up in search box
+		# by default all space will be a wildcard 
+		# clean up trailing, duplicate spaces
+		pattern = pattern.strip(" \t\n\r") 
+		pattern = re.sub("  +", " ", pattern)
+
+		# disable regex searches by default, unless turned on via cli switch
+		if self.regex:
+			pattern = pattern.replace(" ",".*")
+		else:
+			pattern = re.escape(pattern)
+			pattern = pattern.replace("\\ ",".*")
+		
+		lst = self.grep(pattern,self.soundFontsAll);
 		return sorted(lst, key=lambda s: s.lower())
 
 
+	# possible enhancement: add search filter for instruments
+	# currently there is no search filter 
+	# since 99% of the soundfonts I use have less than 10 instruments
 	def filterInstruments(self):
-		# no search filter currently
 		return self.instrumentsAll;
 
 
@@ -1613,6 +1667,8 @@ if __name__ == '__main__':
 			help="load a sf2 directory", default="") 
 		parser.add_option('-c', '--cmd', action="store", dest="fluidsynthCmd", 
 			help="use a custom command to start FluidSynth server", default="") 
+		parser.add_option('--regex', action="store_true", dest="regex", 
+			help="allow regex patterns in search filter") 
 		options, args = parser.parse_args()
 
 		# init api
