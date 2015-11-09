@@ -4,11 +4,8 @@
 #
 #
 # This program creates a simple synthesizer interface for FluidSynth.
-# This lets you easily cycle through a large set of sound fonts
-# and select instruments.
-#
-# This program just runs the FluidSynth command line program, sending 
-# input, and parsing output.  
+# This interface lets you easily search or cycle through a large set of 
+# sound fonts and select instruments.
 #
 #
 # How to use the graphical user interface:
@@ -27,27 +24,41 @@
 #
 #    	-d sf2_dir                  the default path to your sound fonds 
 #    	-f FluidSynth_command       override the start command 
-#	    any additional args         are executed as commands in FluidSynth
+#       any additional args         are executed as commands in FluidSynth
 #
 #   For example:
 #
 #       python  fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
 #
-# To connect a CLI to a runninng FluidSynth process, you can use netcat:
+#
+# System Requirements:
+#    jack (QjackCtl recommended)
+#    FluidSynth (you should configure for command line first)
+#    Python 2.7+
+#    python-wxgtk2.8+
+#
+# Tested with: xubuntu 14.04, FluidSynth version 1.1.6.
+#
+#
+# This program just runs the FluidSynth command line program, sending 
+# input, and parsing output.  All communication is done via the fluidsynth 
+# socket interface (over port 9800).
+#
+# To connect a CLI to a running FluidSynth service, you can use netcat:
 #
 #    nc localhost 9800
 #
+# The only significant difference between the socket interface and running
+# `fluidsynth` on the command line, is the socket interface does NOT have a
+# prompt (for example >).
 #
-# System Requirements:
-#	jack (QjackCtl recommended)
-#	FluidSynth (you should configure for command line first)
-#	Python 2.7+
-#	python-wxgtk2.8+
+# A note for maintenance:  If the software breaks at some point, the likely 
+# cause is the fluidsynth command line method names have changed, or the 
+# format of the returned data has changed.  You can use the command line
+# interface to verify that the string formats are the same as referenced 
+# in the comments above each low-level cmd function call.
 #
-# Tested with: xubuntu 14.04, FluidSynth version 1.1.6
-#
-#
-# All FluidSynth command definitions that are used:
+# Here are all the FluidSynth command definitions used:
 #
 #   echo                        Echo data back 
 #   load file                   Load SoundFont 
@@ -1361,7 +1372,7 @@ class FluidSynthGui(wx.Frame):
 			
 		elif keycode > 32 and keycode < 128:
 
-			# use supplied some type of ascii data.  
+			# user supplied some type of ascii data.  
 			# update search filter
 			a = '' 
 			try:
