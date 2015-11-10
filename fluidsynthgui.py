@@ -1281,7 +1281,7 @@ class FluidSynthGui(wx.Frame):
 		# must be key up to read full text from input
 		#keycode = event.GetKeyCode()
 		path = self.textSoundFontDir.GetValue()
-		self.changeDir(path,True,True)
+		self.changeDir(path,clearSearchFilter=True,keepFocus=True)
 		if event != None:
 			event.Skip()
 
@@ -1293,7 +1293,7 @@ class FluidSynthGui(wx.Frame):
 			print 'selected: %s\n' % dlg.GetPath()
 			path = dlg.GetPath()
 			self.textSoundFontDir.SetValue(path)
-			self.changeDir(path,True)
+			self.changeDir(path,clearSearchFilter=True)
 
 		dlg.Destroy()
 		event.Skip()
@@ -1320,7 +1320,7 @@ class FluidSynthGui(wx.Frame):
 		if os.path.isdir(path):
 			# open directories
 			self.instruments = [] # refresh list 
-			self.changeDir(path,True)
+			self.changeDir(path,clearSearchFilter=True)
 		
 		if event != None:
 			event.Skip()
@@ -1347,7 +1347,7 @@ class FluidSynthGui(wx.Frame):
 		elif keycode in [ wx.WXK_RIGHT, wx.WXK_NUMPAD_RIGHT ]:
 			self.incInstrument(1)
 		elif keycode == wx.WXK_ESCAPE:
-			self.clearSearchFilter(True)
+			self.clearSearchFilter(refreshFontList=True)
 
 		event.Skip()
 
@@ -1364,7 +1364,7 @@ class FluidSynthGui(wx.Frame):
 		if keycode == wx.WXK_RETURN: 
 			if path != None and os.path.isdir(path):
 				# navigate to the new dir
-				self.changeDir(path,True)
+				self.changeDir(path,clearSearchFilter=True)
 
 		elif keycode in [ wx.WXK_BACK, wx.WXK_DELETE ]: 
 			# backspace for search filter
@@ -1409,9 +1409,9 @@ class FluidSynthGui(wx.Frame):
 		if event != None:
 			keycode = event.GetKeyCode()
 			if keycode == wx.WXK_ESCAPE:
-				self.clearSearchFilter(True)
+				self.clearSearchFilter(refreshFontList=True)
 
-		self.drawSoundFontList(True)
+		self.drawSoundFontList(useCache=True)
 		if event != None:
 			event.Skip()
 
@@ -1465,10 +1465,10 @@ class FluidSynthGui(wx.Frame):
 
 
 	# remove filter, force refresh of file listing
-	def clearSearchFilter(self,refresh=False):
+	def clearSearchFilter(self,refreshFontList=False):
 		self.textFilterSoundFont.SetValue('') 
-		if refresh:
-			self.drawSoundFontList(False,True)
+		if refreshFontList:
+			self.drawSoundFontList(preserveInstrument=True)
 
 
 	# load new dir
@@ -1502,8 +1502,8 @@ class FluidSynthGui(wx.Frame):
 
 	# refresh list of soundfonts
 	# expects: changeDir should be called first 
-	def drawSoundFontList(self,cache=False,preserveInstrument=False):
-		if not cache:
+	def drawSoundFontList(self,useCache=False,preserveInstrument=False):
+		if not useCache:
 			allFiles = os.listdir(self.dir)
 			# exclude dot files
 			allFiles = [x for x in allFiles if not x.startswith('.')]	
