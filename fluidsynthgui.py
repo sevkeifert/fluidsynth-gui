@@ -683,7 +683,6 @@ class FluidSynthGui(wx.Frame):
 		self.data = {}
 		self.dataDir = os.path.expanduser('~') + "/.fluidsynth-gui"
 		self.dataFile = self.dataDir + "/data.json" # gui state
-		#self.snapshotFile = self.dataDir + "/jacksnapshot" # jack connections
 
 		# what components will be persistent?
 		# anything in this list will be automatically serialized
@@ -730,7 +729,7 @@ class FluidSynthGui(wx.Frame):
 
 
 	###########################################################################
-	# persistent data utilities ...
+	# persistence/data utilities ...
 	###########################################################################
 
 	# process command line args
@@ -851,7 +850,7 @@ class FluidSynthGui(wx.Frame):
 			# restore last dir, will restore filtered view
 			path = self.getData("textSoundFontDir")			
 			print "restore dir path: " + str(path)
-			self.changeDir(path)		
+			self.changeDir(path,giveFocus=True)
 
 			# restore last fonts in memory
 			# note: font ids will change on reloading
@@ -1281,7 +1280,7 @@ class FluidSynthGui(wx.Frame):
 		# must be key up to read full text from input
 		#keycode = event.GetKeyCode()
 		path = self.textSoundFontDir.GetValue()
-		self.changeDir(path,clearSearchFilter=True,keepFocus=True)
+		self.changeDir(path,clearSearchFilter=True) # keep focus if typing
 		if event != None:
 			event.Skip()
 
@@ -1289,20 +1288,24 @@ class FluidSynthGui(wx.Frame):
 	def onClickButtonBrowse(self, event):
 		dlg = wx.DirDialog(self, "Choose a directory:", style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
 		dlg.SetPath(self.dir)
+		path = None
 		if dlg.ShowModal() == wx.ID_OK:
 			print 'selected: %s\n' % dlg.GetPath()
 			path = dlg.GetPath()
-			self.textSoundFontDir.SetValue(path)
-			self.changeDir(path,clearSearchFilter=True)
 
 		dlg.Destroy()
+
+		if path != None:
+			self.textSoundFontDir.SetValue(path)
+			self.changeDir(path,clearSearchFilter=True,giveFocus=True)
+
 		event.Skip()
 
 
 	# sound soundfont change
 	def onSelectSoundFont(self, event=None):
 
-		path = self.getSelectedPath()
+		path = self.getSelectedFontFile()
 
 		if path != None and not os.path.isdir(path):
 			# automatically try to open file as sf2
@@ -1316,11 +1319,11 @@ class FluidSynthGui(wx.Frame):
 	# allow changing directory if shown in sound font listing
 	def onDblClickSoundFont(self, event=None):
 
-		path = self.getSelectedPath()
+		path = self.getSelectedFontFile()
 		if os.path.isdir(path):
 			# open directories
 			self.instruments = [] # refresh list 
-			self.changeDir(path,clearSearchFilter=True)
+			self.changeDir(path,clearSearchFilter=True,giveFocus=True)
 		
 		if event != None:
 			event.Skip()
@@ -1357,14 +1360,14 @@ class FluidSynthGui(wx.Frame):
 	def onKeyDownSoundFont(self, event):
 
 		keycode = event.GetKeyCode()
-		path = self.getSelectedPath()
+		path = self.getSelectedFontFile()
 
 		self.onKeyDownListBoxes(event)
 
 		if keycode == wx.WXK_RETURN: 
 			if path != None and os.path.isdir(path):
 				# navigate to the new dir
-				self.changeDir(path,clearSearchFilter=True)
+				self.changeDir(path,clearSearchFilter=True,giveFocus=True)
 
 		elif keycode in [ wx.WXK_BACK, wx.WXK_DELETE ]: 
 			# backspace for search filter
@@ -1411,7 +1414,7 @@ class FluidSynthGui(wx.Frame):
 			if keycode == wx.WXK_ESCAPE:
 				self.clearSearchFilter(refreshFontList=True)
 
-		self.drawSoundFontList(useCache=True)
+		self.drawSoundFontList(useCache=True,giveFocus=True)
 		if event != None:
 			event.Skip()
 
@@ -1439,40 +1442,8 @@ class FluidSynthGui(wx.Frame):
 	# api ...
 	###########################################################################
 
-	# proxy
-	def cmd(self,s,non_blocking=False):
-		return self.fluidsynth.cmd(s,non_blocking)	
-
-
-	# what sound font is actively selected?
-	def getSelectedPath(self):
-
-		try:
-			idx = self.listSoundFont.GetSelection()
-			if ( idx < 0 ):
-				return
-
-			selected = self.soundFonts[idx]
-			path = self.dir + '/' + selected
-
-			return path
-
-		except Exception, e:
-			print e
-			pass
-
-		return ''
-
-
-	# remove filter, force refresh of file listing
-	def clearSearchFilter(self,refreshFontList=False):
-		self.textFilterSoundFont.SetValue('') 
-		if refreshFontList:
-			self.drawSoundFontList(preserveInstrument=True)
-
-
 	# load new dir
-	def changeDir(self, path, clearSearchFilter=False, keepFocus=False):
+	def changeDir(self, path, clearSearchFilter=False, giveFocus=False):
 
 		path = os.path.realpath(path) # cannonical form
 		if not os.path.isdir(path):
@@ -1488,37 +1459,85 @@ class FluidSynthGui(wx.Frame):
 		if clearSearchFilter:
 			self.clearSearchFilter()
 
-		self.drawSoundFontList()
+		self.drawSoundFontList(giveFocus=giveFocus)
 
-		if not keepFocus:
-			# update text input
+		if giveFocus:
+			# update text input and transfer focus to font list
 			if path != self.textSoundFontDir.GetValue():
 				self.textSoundFontDir.SetValue(path) 
-			# automatically highlight first item in list
-			if len(self.soundFonts):
-				self.listSoundFont.SetSelection(0)
-				self.listSoundFont.SetFocus()
 
 
-	# refresh list of soundfonts
-	# expects: changeDir should be called first 
-	def drawSoundFontList(self,useCache=False,preserveInstrument=False):
-		if not useCache:
-			allFiles = os.listdir(self.dir)
-			# exclude dot files
-			allFiles = [x for x in allFiles if not x.startswith('.')]	
-			self.soundFontsAll = allFiles 
+	# getters/setters for font and instrument
+	# idx is the position in the select list (if in bounds)
 
-		self.soundFonts = self.filterSoundFont() # apply search filter
-		self.soundFonts.insert(0, '..') # add up-dir option
-		self.listSoundFont.Set(self.soundFonts)
+	# what sound font is actively selected?
+	def getFontFileFromIdx(self,idx):
+		try:
+			if idx > -1:
+				selected = self.soundFonts[idx]
+				path = self.dir + '/' + selected
+				return path
+		except Exception, e:
+			print e
+		return ''
 
-		if not preserveInstrument:
-			self.drawInstrumentList(0);
+
+	# what is the list index for a given font name?  
+	# arg may be full path or just font filename.sf2
+	# may return -1 if not found
+	def getIdxFromFontName(self,path):
+		try:
+			if path == '..':
+				return 0
+			fontName = os.path.basename(path) 
+			idx = self.soundFonts.index(fontName)
+			return idx
+		except Exception,e:
+			print e
+		return -1	
+		
+
+	# what sound font is actively selected?
+	def getSelectedFontFile(self):
+		try:
+			idx = self.listSoundFont.GetSelection()
+			if idx > -1:
+				return self.getFontFileFromIdx(idx)
+
+		except Exception, e:
+			print e
+		return ''
+
+
+	# what is the list index for a given intrument name? 
+	# may return -1 if not found
+	def getIdxFromInstrumentName(self,value):
+		try:
+			idx = self.instruments.index(value)
+			return idx
+		except Exception,e:
+			print e
+		return -1	
+
+
+	# what is the instrumetn name for a given list index?
+	def getInstrumentFromIdx(self,idx):
+		if idx > -1:
+			instrumentName = self.instruments[idx]
+			return instrumentName
+		return ''
+
+
+	# what instrument is currently selected?
+	def getSelectedInstrument(self):
+		idx = self.listSoundFont.GetSelection()
+		return self.getInstrumentFromIdx(idx)
 
 
 	# change soundFont in fluid synth 
 	def setSoundFont(self, path):
+		if path == '' or os.path.isdir(path):
+			return -1
 
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
 		if id == -1:
@@ -1527,26 +1546,14 @@ class FluidSynthGui(wx.Frame):
 		self.instrumentsAll = instrumentsAll
 		self.instruments = self.filterInstruments()
 
-		fontName = os.path.basename(path) 
-		selIdx = self.soundFonts.index(fontName)
+		selIdx = self.getIdxFromFontName(path)
 		if id != -1 and selIdx != -1 and selIdx != self.listSoundFont.GetSelection():
-			# select item if not already
-			# visually select font in list if needed
+			# visually select font in list only if needed
 			self.listSoundFont.SetSelection(selIdx)
 
 		#self.setInstrumentByIdx(0) # already initalized
 		self.drawInstrumentList(0);
 		return id
-
-
-	# refresh entire list of instruments  
-	# this is always drawn from cache
-	# expects: setSoundFont should be called first
-	def drawInstrumentList(self,selectedIdx=None):
-		if selectedIdx != None: 
-			self.instrumentsIdx = selectedIdx
-		self.listInstruments.Set(self.instruments)
-		self.listInstruments.SetSelection(self.instrumentsIdx)
 
 
 	# change the instrument in fluidsynth
@@ -1557,11 +1564,12 @@ class FluidSynthGui(wx.Frame):
 	def setInstrumentByName(self,instrumentName):
 
 		if instrumentName == '':
-			raise Exception("instrument name blank")
+			print "warn: no instrument name"
+			return False # nothing to do
 
 		idx = self.instrumentsIdx
 		try:
-			idx = self.instruments.index(instrumentName)
+			idx = self.getIdxFromInstrumentName(instrumentName)
 			self.instrumentsIdx = idx
 		except:
 			print "error: did not resolve name->id for setInstrumentByName"
@@ -1581,12 +1589,38 @@ class FluidSynthGui(wx.Frame):
 			idx = self.incInstrumentIdx( selectedIdx, 0 )
 			self.instrumentsIdx = idx
 
-		instrumentName = self.instruments[self.instrumentsIdx]
+		instrumentName = self.getInstrumentFromIdx(self.instrumentsIdx)
 		return self.setInstrumentByName(instrumentName)	
 
 
-	
-	# increment scrollign index, keep index in bounds
+	# refresh list of soundfonts
+	# expects: changeDir should be called first 
+	def drawSoundFontList(self, useCache=False, preserveInstrument=False, giveFocus=False):
+		oldValue = self.getSelectedFontFile() # preserve selection if possible
+
+		if not useCache:
+			allFiles = os.listdir(self.dir)
+			# exclude dot files
+			allFiles = [x for x in allFiles if not x.startswith('.')]	
+			self.soundFontsAll = allFiles 
+
+		self.soundFonts = self.filterSoundFont() # apply search filter
+		self.soundFonts.insert(0, '..') # add up-dir option
+		self.listSoundFont.Set(self.soundFonts)
+
+		idx = self.getIdxFromFontName(oldValue) 
+		if idx < 0:
+			idx = 0 # could not restore old selection.  select first
+		self.listSoundFont.SetSelection(idx)
+
+		if not preserveInstrument:
+			self.drawInstrumentList(0);
+		
+		if giveFocus and len(self.soundFonts):
+			self.listSoundFont.SetFocus()
+
+
+	# increment scrolling index, keep index in bounds
 	def incInstrumentIdx(self,id,add=0):
 		id+=add
 		if ( id < 0 ):
@@ -1602,6 +1636,16 @@ class FluidSynthGui(wx.Frame):
 			idx = self.incInstrumentIdx(self.instrumentsIdx,direction)
 			self.setInstrumentByIdx(idx)
 			self.drawInstrumentList()
+
+
+	# refresh entire list of instruments  
+	# this is always drawn from cache
+	# expects: setSoundFont should be called first
+	def drawInstrumentList(self,selectedIdx=None):
+		if selectedIdx != None: 
+			self.instrumentsIdx = selectedIdx
+		self.listInstruments.Set(self.instruments)
+		self.listInstruments.SetSelection(self.instrumentsIdx)
 
 
 	# search 
@@ -1636,6 +1680,13 @@ class FluidSynthGui(wx.Frame):
 	# since 99% of the soundfonts I use have less than 10 instruments
 	def filterInstruments(self):
 		return self.instrumentsAll;
+
+
+	# remove filter, force refresh of file listing
+	def clearSearchFilter(self,refreshFontList=False):
+		self.textFilterSoundFont.SetValue('') 
+		if refreshFontList:
+			self.drawSoundFontList(preserveInstrument=True)
 
 
 	# enable/disable fx widgets
