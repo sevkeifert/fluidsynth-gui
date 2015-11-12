@@ -393,6 +393,40 @@ class FluidSynthApi:
 		return self.selectedChannel-1
 
 
+	# return last known font and instrument on a channel
+	# note: channel is 1-based
+	# return: (font_file, instrument_name)
+	def getFontInstrumentFromChannel(self,channel):
+
+		try:
+			chan0 = channel-1 # to 0 based
+			print 'chan0', str(chan0)
+			font_id = self.fontsInUse[chan0] 
+			print 'font_id', str(font_id)
+			print self.fontFilesLoaded
+			font = self.fontFilesLoaded[font_id]
+			print 'font', str(font)
+			instrument = self.instrumentsInUse[chan0]
+			print 'instrument', str(instrument)
+			return (font, instrument)
+		except Exception, e:
+			print "error: could not find font, instrument on channel "+str(channel)
+			print e
+
+		return ('','')
+
+
+	# lookup fluidsynth's font id from a path (if loaded)
+	# returns int
+	def getFontIdFromPath(self, path):
+		print self.fontFilesLoaded
+		for key, value in self.fontFilesLoaded.iteritems():
+			print "test: ", value, path
+			if value == path:
+				return int(key)
+		return -1
+
+
 	# load sound soundfont, for example:
 	#
 	#> load "/home/Music/sf2/Brass 4.SF2"
@@ -402,17 +436,24 @@ class FluidSynthApi:
 	def loadSoundFont(self, sf2Filename):
 
 		try:
-			data = self.cmd('load "'+ sf2Filename +'"')
+			# try cache
+			id = self.getFontIdFromPath(sf2Filename)
+			print "cached ", id	
 
-			# parse sound font id
-			ids = [int(s) for s in data.split() if s.isdigit()]	
-			if len(ids) > 0:
-				id = ids[-1] # return last item
-				id = int(id)
-				self.fontFilesLoaded[id] = sf2Filename # store mapping id->file
-				self.activeSoundFontId = id
-				self.activeSoundFontFile = sf2Filename
-				return id
+			if id < 0:
+				# cache miss	
+				data = self.cmd('load "'+ sf2Filename +'"')
+
+				# parse sound font id
+				ids = [int(s) for s in data.split() if s.isdigit()]	
+				if len(ids) > 0:
+					id = ids[-1] # return last item
+					id = int(id)
+
+			self.fontFilesLoaded[id] = sf2Filename # store mapping id->file
+			self.activeSoundFontId = id
+			self.activeSoundFontFile = sf2Filename
+			return id
 
 		except Exception,e:
 			print "error: could not load font: " + sf2Filename
@@ -493,15 +534,16 @@ class FluidSynthApi:
 	#> inst 1
 	#000-000 Dark Violins  
 	#> 
-	def getInstruments(self,id):
+	def getInstruments(self,fontId):
 
-		id = int(id)
-		if id < 0:
+		fontId = int(fontId)
+		if fontId < 0:
 			return []
 
 		try:
-			data = self.cmd('inst ' + str(id))
+			data = self.cmd('inst ' + str(fontId))
 			ids = data.splitlines()
+			#ids = map(lambda s: s.strip(" "), ids)
 			#ids = ids[2:] # cli only: discard first two items (header)
 			return ids
 
@@ -549,7 +591,7 @@ class FluidSynthApi:
 			return data
 
 		except Exception,e:
-			print 'error: could not select instrument: ' + str(id)
+			print 'error: could not select instrument: ' + str(fontId)
 			print e
 
 		return False 
@@ -1192,88 +1234,6 @@ class FluidSynthGui(wx.Frame):
 	# most of these can be called directly (event=None)
 	###########################################################################
 
-	# master gain	
-	def onScrollGain(self,event=None):
-		value = self.sGain.GetValue()
-		value *= 1/20.0 # 100 -> 5 
-		self.fluidsynth.setGain(value)
-
-
-	# reverb 
-	def onClickEnableReverb(self,event=None):
-		value = self.cbEnableReverb.GetValue()
-		self.fluidsynth.setReverb(value)	
-		self.enableReverbControls(value)
-
-		# sync api to sliders
-		if value:
-			self.onScrollReverbDamp()
-			self.onScrollReverbRoomSize()
-			self.onScrollReverbWidth()
-			self.onScrollReverbLevel()
-
-
-	def onScrollReverbDamp(self,event=None):
-		value = self.sReverbDamp.GetValue()
-		value *= 1/100.0  # 100 -> 1
-		self.fluidsynth.setReverbDamp(value) 
-
-
-	def onScrollReverbRoomSize(self,event=None):
-		value = self.sReverbRoomSize.GetValue()
-		value *= 1/100.0  # 100 -> 1
-		self.fluidsynth.setReverbRoomSize(value) 
-
-
-	def onScrollReverbWidth(self,event=None):
-		value = self.sReverbWidth.GetValue()
-		value *= 1/100.0  # 100 -> 1
-		self.fluidsynth.setReverbWidth(value) 
-
-
-	def onScrollReverbLevel(self,event=None):
-		value = self.sReverbLevel.GetValue()
-		value *= 1/100.0  # 100 -> 1
-		self.fluidsynth.setReverbLevel(value) 
-
-
-	# chorus change
-	def onClickEnableChorus(self,event=None):
-		value = self.cbEnableChorus.GetValue()
-		self.fluidsynth.setChorus(value)
-		self.enableChorusControls(value)
-
-		# sync api to sliders
-		if value:
-			self.onScrollChorusNR()
-			self.onScrollChorusLevel()
-			self.onScrollChorusSpeed()
-			self.onScrollChorusDepth()
-
-
-	def onScrollChorusNR(self,event=None):
-		value = self.sChorusNR.GetValue()
-		# scale: 1 -> 1
-		self.fluidsynth.setChorusNR(value)
-
-
-	def onScrollChorusLevel(self,event=None):
-		value = self.sChorusLevel.GetValue()
-		value *= 1/100.0 # 100 -> 1
-		self.fluidsynth.setChorusLevel(value)
-
-
-	def onScrollChorusSpeed(self,event=None):
-		value = self.sChorusSpeed.GetValue()
-		value *= 1/100.0 # 100 -> 1
-		self.fluidsynth.setChorusSpeed(value)
-
-
-	def onScrollChorusDepth(self,event=None):
-		value = self.sChorusDepth.GetValue()
-		# scale: 1 -> 1
-		self.fluidsynth.setChorusDepth(value)
-
 
 	# dir change
 	def onKeyUpDirectory(self, event=None):
@@ -1414,7 +1374,7 @@ class FluidSynthGui(wx.Frame):
 			if keycode == wx.WXK_ESCAPE:
 				self.clearSearchFilter(refreshFontList=True)
 
-		self.drawSoundFontList(useCache=True,giveFocus=True)
+		self.drawSoundFontList(useCache=True,giveFocus=True,preserveInstrument=True)
 		if event != None:
 			event.Skip()
 
@@ -1424,10 +1384,109 @@ class FluidSynthGui(wx.Frame):
 		channel = self.spinChannel.GetValue()
 		self.fluidsynth.selectedChannel = channel
 
+		# try to restore last known font/instrument
+		(font,instrument)=self.fluidsynth.getFontInstrumentFromChannel(channel)
+		print (font,instrument)
+
+		if font != '':
+			dirname = os.path.dirname(font)
+			self.changeDir(dirname)
+			self.setSoundFont(font)	
+		else:
+			self.listSoundFont.SetSelection(-1)	
+
+		if instrument != '':
+			self.setInstrumentByName(instrument)	
+		else:
+			self.listInstruments.SetSelection(-1)
+		
 
 	# reset (all notes off)
 	def onClickPanic(self, event):
 		self.fluidsynth.panic()
+
+
+	# master gain	
+	def onScrollGain(self,event=None):
+		value = self.sGain.GetValue()
+		value *= 1/20.0 # 100 -> 5 
+		self.fluidsynth.setGain(value)
+
+
+	# reverb 
+	def onClickEnableReverb(self,event=None):
+		value = self.cbEnableReverb.GetValue()
+		self.fluidsynth.setReverb(value)	
+		self.enableReverbControls(value)
+
+		# sync api to sliders
+		if value:
+			self.onScrollReverbDamp()
+			self.onScrollReverbRoomSize()
+			self.onScrollReverbWidth()
+			self.onScrollReverbLevel()
+
+
+	def onScrollReverbDamp(self,event=None):
+		value = self.sReverbDamp.GetValue()
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbDamp(value) 
+
+
+	def onScrollReverbRoomSize(self,event=None):
+		value = self.sReverbRoomSize.GetValue()
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbRoomSize(value) 
+
+
+	def onScrollReverbWidth(self,event=None):
+		value = self.sReverbWidth.GetValue()
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbWidth(value) 
+
+
+	def onScrollReverbLevel(self,event=None):
+		value = self.sReverbLevel.GetValue()
+		value *= 1/100.0  # 100 -> 1
+		self.fluidsynth.setReverbLevel(value) 
+
+
+	# chorus change
+	def onClickEnableChorus(self,event=None):
+		value = self.cbEnableChorus.GetValue()
+		self.fluidsynth.setChorus(value)
+		self.enableChorusControls(value)
+
+		# sync api to sliders
+		if value:
+			self.onScrollChorusNR()
+			self.onScrollChorusLevel()
+			self.onScrollChorusSpeed()
+			self.onScrollChorusDepth()
+
+
+	def onScrollChorusNR(self,event=None):
+		value = self.sChorusNR.GetValue()
+		# scale: 1 -> 1
+		self.fluidsynth.setChorusNR(value)
+
+
+	def onScrollChorusLevel(self,event=None):
+		value = self.sChorusLevel.GetValue()
+		value *= 1/100.0 # 100 -> 1
+		self.fluidsynth.setChorusLevel(value)
+
+
+	def onScrollChorusSpeed(self,event=None):
+		value = self.sChorusSpeed.GetValue()
+		value *= 1/100.0 # 100 -> 1
+		self.fluidsynth.setChorusSpeed(value)
+
+
+	def onScrollChorusDepth(self,event=None):
+		value = self.sChorusDepth.GetValue()
+		# scale: 1 -> 1
+		self.fluidsynth.setChorusDepth(value)
 
 
 	# on shutdown
@@ -1539,6 +1598,7 @@ class FluidSynthGui(wx.Frame):
 		if path == '' or os.path.isdir(path):
 			return -1
 
+		# if file, try to load
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
 		if id == -1:
 			instrumentsAll = ["Error: could not load as .sf2 file"]
@@ -1546,9 +1606,9 @@ class FluidSynthGui(wx.Frame):
 		self.instrumentsAll = instrumentsAll
 		self.instruments = self.filterInstruments()
 
+		# visually select font in list only if needed
 		selIdx = self.getIdxFromFontName(path)
 		if id != -1 and selIdx != -1 and selIdx != self.listSoundFont.GetSelection():
-			# visually select font in list only if needed
 			self.listSoundFont.SetSelection(selIdx)
 
 		#self.setInstrumentByIdx(0) # already initalized
