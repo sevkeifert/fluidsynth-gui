@@ -400,14 +400,9 @@ class FluidSynthApi:
 
 		try:
 			chan0 = channel-1 # to 0 based
-			print 'chan0', str(chan0)
 			font_id = self.fontsInUse[chan0] 
-			print 'font_id', str(font_id)
-			print self.fontFilesLoaded
 			font = self.fontFilesLoaded[font_id]
-			print 'font', str(font)
 			instrument = self.instrumentsInUse[chan0]
-			print 'instrument', str(instrument)
 			return (font, instrument)
 		except Exception, e:
 			print "error: could not find font, instrument on channel "+str(channel)
@@ -419,9 +414,7 @@ class FluidSynthApi:
 	# lookup fluidsynth's font id from a path (if loaded)
 	# returns int
 	def getFontIdFromPath(self, path):
-		print self.fontFilesLoaded
 		for key, value in self.fontFilesLoaded.iteritems():
-			print "test: ", value, path
 			if value == path:
 				return int(key)
 		return -1
@@ -438,7 +431,7 @@ class FluidSynthApi:
 		try:
 			# try cache
 			id = self.getFontIdFromPath(sf2Filename)
-			print "cached ", id	
+			#print "hit cache ", id	
 
 			if id < 0:
 				# cache miss	
@@ -1381,12 +1374,14 @@ class FluidSynthGui(wx.Frame):
 
 	# channel change
 	def onClickChannel(self,event):
+
+		self.changeDir('.',clearSearchFilter=True)
+
 		channel = self.spinChannel.GetValue()
 		self.fluidsynth.selectedChannel = channel
 
-		# try to restore last known font/instrument
+		# try to restore last known font/instrument on this channel
 		(font,instrument)=self.fluidsynth.getFontInstrumentFromChannel(channel)
-		print (font,instrument)
 
 		if font != '':
 			dirname = os.path.dirname(font)
@@ -1398,8 +1393,8 @@ class FluidSynthGui(wx.Frame):
 		if instrument != '':
 			self.setInstrumentByName(instrument)	
 		else:
-			self.listInstruments.SetSelection(-1)
-		
+			self.drawInstrumentList(-1)	
+
 
 	# reset (all notes off)
 	def onClickPanic(self, event):
@@ -1502,6 +1497,7 @@ class FluidSynthGui(wx.Frame):
 	###########################################################################
 
 	# load new dir
+	# pass in None for refresh
 	def changeDir(self, path, clearSearchFilter=False, giveFocus=False):
 
 		path = os.path.realpath(path) # cannonical form
@@ -1513,7 +1509,8 @@ class FluidSynthGui(wx.Frame):
 			# no change.  we're already there
 			return
 
-		self.dir = path
+		if path != None:
+			self.dir = path
 
 		if clearSearchFilter:
 			self.clearSearchFilter()
