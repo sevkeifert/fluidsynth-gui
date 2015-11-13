@@ -2,90 +2,11 @@
 #
 # Kevin Seifert - GPL 2015
 #
-#
 # This program creates a simple synthesizer interface for FluidSynth.
 # This interface lets you easily search or cycle through a large set of 
 # sound fonts and select instruments.
 #
-#
-# How to use the graphical user interface:
-#     1. select a folder that contains *.sf2 files
-#     2. Up/Down arrows will cycle through the SoundFont files
-#     3. Left/Right arrows will cycle through the instruments in each file
-#     4. You can filter the sound fonts listed (search box at bottom).
-#        Also, you can type the filter while the soundfont list has focus.
-#        Also any SPACE will be translated to a wildcard.
-#        Press ESCAPE to clear the search filter.
-#        The search box can regular expressions as well. use --regex switch 
-#     5. Optional: you can set the midi channel you want to use (default = 1) 
-#     6. Optional: on the second tab, you can set levels for gain, reverb, 
-#         and chorus.
-#
-#
-# Command line options:
-#
-#    	-d sf2_dir                  the default path to your sound fonds 
-#    	-f FluidSynth_command       override the start command 
-#       any additional args         are executed as commands in FluidSynth
-#
-#   For example:
-#
-#       python  fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
-#
-#
-# System Requirements:
-#    jack (QjackCtl recommended)
-#    FluidSynth (you should configure for command line first)
-#    Python 2.7+
-#    python-wxgtk2.8+
-#
-# Tested with: xubuntu 14.04, FluidSynth version 1.1.6.
-#
-#
-# This program just runs the FluidSynth command line program, sending 
-# input, and parsing output.  All communication is done via the fluidsynth 
-# socket interface (over port 9800).
-#
-# To connect a CLI to a running FluidSynth service, you can use netcat:
-#
-#    nc localhost 9800
-#
-# The only significant difference between the socket interface and running
-# `fluidsynth` on the command line, is the socket interface does NOT have a
-# prompt (for example >).
-#
-# A note for maintenance:  If the software breaks at some point, the likely 
-# cause is the fluidsynth command line method names have changed, or the 
-# format of the returned data has changed.  You can use the command line
-# interface to verify that the string formats are the same as referenced 
-# in the comments above each low-level cmd function call.
-#
-# Here are all the FluidSynth command definitions used:
-#
-#   echo                        Echo data back 
-#   load file                   Load SoundFont 
-#   unload id                   Unload SoundFont by ID 
-#   fonts                       Display the list of loaded SoundFonts
-#   inst font                   Print out the available instruments for the font
-#   select chan font bank prog  Combination of bank-select and program-change
-#	get var
-#	set var value
-#		synth.gain             0 - 10 
-#		synth.reverb.active    1 or 0
-#		synth.chorus.activ     1 or 0
-#   gain value                 Set the master gain (0 < gain < 5)
-#   reverb [0|1|on|off]        Turn the reverb on or off
-#   rev_setroomsize num        Change reverb room size. 0-1
-#   rev_setdamp num            Change reverb damping. 0-1
-#   rev_setwidth num           Change reverb width. 0-1
-#   rev_setlevel num           Change reverb level. 0-1
-#   chorus [0|1|on|off]        Turn the chorus on or off
-#   cho_set_nr n               Use n delay lines (default 3)
-#   cho_set_level num          Set output level of each chorus line to num
-#   cho_set_speed num          Set mod speed of chorus to num (Hz)
-#   cho_set_depth num          Set chorus modulation depth to num (ms)
-#   reset                      All notes off
-#
+# See README.txt for more details.
 #
 # Classes defined below:
 #
@@ -93,7 +14,6 @@
 #                   using the socket api.
 #	FluidSynthGui - the graphical interface wraps the api and saves the state
 #                   of the application on shutdown.
-#
 
 import sys 
 import os 
@@ -139,7 +59,23 @@ class FluidSynthApi:
 		self.fluidsynth = None # the FluidSynth process
 
 		# see `man fluidsynth` for explanation of cli options
-		self.fluidsynthCmd = 'fluidsynth -sli -g5 -C0 -R0'
+		#
+		# -C, --chorus
+		#    Turn the chorus on or off [0|1|yes|no, default = on]
+		# -i, --no-shell
+		#    Don't read commands from the shell [default = yes]
+		# -g, --gain
+		#    Set the master gain [0 < gain < 10, default = 0.2]
+		# -j, --connect-jack-outputs
+		#    Attempt to connect the jack outputs to the physical ports
+		# -p, --portname=[label]
+		#    Set MIDI port name (alsa_seq, coremidi drivers)
+		# -s, --server
+		#    Start FluidSynth as a server process
+		# -R, --reverb
+		#    Turn the reverb on or off [0|1|yes|no, default = on]
+
+		self.fluidsynthCmd = 'fluidsynth -sli -g5 -C0 -R0 -pFluidSynth-GUI'
 
 		# arbitrary text to mark the end of stream from fluidsynth
 		self.eof = '.'  
