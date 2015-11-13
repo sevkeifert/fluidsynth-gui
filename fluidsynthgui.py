@@ -1366,7 +1366,7 @@ class FluidSynthGui(wx.Frame):
 			if keycode == wx.WXK_ESCAPE:
 				self.clearSearchFilter(refreshFontList=True)
 
-		self.refreshSoundFontList(useCache=True,giveFocus=True)
+		self.refreshSoundFontList(giveFocus=True)
 		if event != None:
 			event.Skip()
 
@@ -1636,7 +1636,7 @@ class FluidSynthGui(wx.Frame):
 			idx = self.getIdxFromInstrumentName(instrumentName)
 			self.instrumentsIdx = idx
 		except:
-			print "error: did not resolve name->id for setInstrumentByName"
+			print 'error: did not resolve name->id for setInstrumentByName'
 			print '    for name:  "' + instrumentName + '"'
 
 		# visually select instrument in list if needed
@@ -1659,10 +1659,9 @@ class FluidSynthGui(wx.Frame):
 
 	# refresh list of soundfonts
 	# expects: changeDir should be called first 
-	def refreshSoundFontList(self, useCache=False, resetInstruments=False, giveFocus=False):
+	def refreshSoundFontList(self, resetInstruments=False, giveFocus=False):
 		oldValue = self.getSelectedFontFile() # preserve selection if possible
 
-#		if not useCache:
 		self.soundFonts = self.filterSoundFont() # apply search filter
 		self.soundFonts.insert(0, '..') # add up-dir option
 		self.listSoundFont.Set(self.soundFonts)
