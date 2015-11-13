@@ -224,7 +224,7 @@ HELP, MY AUDIO STOPPED WORKING
 Occasionally, if jackd does not stop running, it will prevent other audio from
 playing.  On linux, you can stop the jackd service with the command:
 
-    kill's jackd
+    killall jackd
 
 
 
