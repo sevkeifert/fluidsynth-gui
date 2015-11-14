@@ -27,18 +27,35 @@ however, and so far I've only tested it with:
 HOW TO USE THE GRAPHICAL USER INTERFACE
 -------------------------------------------------------------------------------
 
-    1. Select a folder that contains *.sf2 files.
-    2. Up/Down arrows will cycle through the SoundFont files.
-    3. Left/Right arrows will cycle through the instruments in each file
-    
-       Also, you can type the filter while the SoundFont list has focus.
-       Also any SPACE will be translated to a wildcard.
-       Press ESCAPE to clear the search filter.
+The interface is designed for real-time performance and sampling of a large
+number of sound fonts.
+
+    1. Select a folder that contains *.sf2 files. 
+       Either browse for a folder or type it directly in the text box.
+
+    2. UP/DOWN arrows will cycle through the SoundFont files.
+
+    3. LEFT/RIGHT arrows will cycle through the instruments in each file
+
+	4. Also, you can type a search filter while the SoundFont list has focus.
+
+       SPACE					is translated to a wildcard
+       ESCAPE                   completely clear the search filter
+       BACKSPACE/DELETE         delete the last character(s) typed
+
        The search box can use regular expressions as well. use --regex switch 
 
-    5. Optional: you can set the midi channel you want to use (default = 1) 
-    6. Optional: on the second tab, you can set levels for gain, reverb, 
-        and chorus.
+	5. You can navigate folders from directly inside the SoundFont list box.
+
+       ENTER or DOUBLE-CLICK    open the folder
+       select ".."              go up to the parent folder.
+
+    6. You can set the midi channel you want to use (default = 1) 
+       So, you can load 16 different fonts on 16 midi channels.
+
+    7. Click the button "All notes off" to reset your midi controller.
+
+    8. On the Levels tab, you can set levels for gain, reverb, and chorus.
 
 
 -------------------------------------------------------------------------------
