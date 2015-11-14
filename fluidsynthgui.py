@@ -1312,7 +1312,7 @@ class FluidSynthGui(wx.Frame):
 			if keycode == wx.WXK_ESCAPE:
 				self.clearSearchFilter(refreshFontList=True)
 
-		self.refreshSoundFontList(giveFocus=True)
+		self.refreshSoundFontList()
 		if event != None:
 			event.Skip()
 
