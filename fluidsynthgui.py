@@ -55,7 +55,7 @@ class FluidSynthApi:
 		self.host='localhost'
 		self.port=9800
 		self.buffsize=4096
-		self.readtimeout=2 # sec
+		self.readtimeout=5 # sec
 		self.fluidsynth = None # the FluidSynth process
 
 		# see `man fluidsynth` for explanation of cli options
