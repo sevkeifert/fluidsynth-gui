@@ -1271,9 +1271,11 @@ class FluidSynthGui(wx.Frame):
 			# backspace for search filter
 			try:
 				search = self.textFilterSoundFont.GetValue()
-				search = search[:-1]
-				self.textFilterSoundFont.SetValue(search)
-				self.onKeyUpFilterSoundFont()
+				if len(search) > 0:
+					# remove last char
+					search = search[:-1]
+					self.textFilterSoundFont.SetValue(search)
+					self.onKeyUpFilterSoundFont()
 			except Exception, e:
 				print e
 				pass
@@ -1307,12 +1309,19 @@ class FluidSynthGui(wx.Frame):
 	def onKeyUpFilterSoundFont(self, event=None):
 
 		keycode = -1
+		giveFocus = False
 		if event != None:
 			keycode = event.GetKeyCode()
+
 			if keycode == wx.WXK_ESCAPE:
 				self.clearSearchFilter(refreshFontList=True)
 
-		self.refreshSoundFontList()
+			# up/down in text input? shift focus back to font listing
+			elif keycode in [ wx.WXK_UP, wx.WXK_NUMPAD_UP, 
+							  wx.WXK_DOWN, wx.WXK_NUMPAD_DOWN]:
+				giveFocus = True	
+
+		self.refreshSoundFontList(giveFocus=giveFocus)
 		if event != None:
 			event.Skip()
 
