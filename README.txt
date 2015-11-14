@@ -209,11 +209,14 @@ prompt (for example >).
 FUTURE MAINTENANCE
 -------------------------------------------------------------------------------
 
-If the software breaks at some point, the likely cause is the fluidsynth
-command line method names have changed, or the format of the returned data has
-changed.  You can use the command line interface to verify that the string
-formats are the same as referenced in the comments above each low-level cmd
-function call.
+If the software breaks at some point, one possible cause is syntax or Python
+libraries have changed, and the code needs to be updated to use your version of
+Python.
+
+Another the likely cause is the fluidsynth commands have changed (or the format
+of the returned data has changed).  You can use the command line interface to
+verify that the string formats are the same as referenced in the comments above
+each low-level cmd() function call.
 
 Here are all the FluidSynth command definitions used:
 
@@ -241,6 +244,10 @@ Here are all the FluidSynth command definitions used:
     cho_set_depth num           Set chorus modulation depth to num (ms)
     reset                       All notes off
 
+
+I split the API out from the GUI so it can be used or extended for other
+projects if needed.  It's similar to the library pyfluidsynth, except the API
+is using the fluidsynth socket interface instead of lower level c calls.  
 
 -------------------------------------------------------------------------------
 HELP, MY AUDIO STOPPED WORKING
