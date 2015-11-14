@@ -173,15 +173,21 @@ Then start the program with a script like:
 COMMAND LINE OPTIONS
 -------------------------------------------------------------------------------
 
+Usage:
+
+      ./fluidsynthgui.py  [option ...]  [arg1 arg2 arg3 ...] 
+
+Example:
+
+      ./fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
+
+Options:
+
        -d sf2_dir                  the default path to your sound fonts 
        -f FluidSynth_command       override the start command 
        --regex                     allow regular expressions in search box 
 
-      any additional args       are executed as commands in FluidSynth
-
-  For example:
-
-      ./fluidsynthgui.py  -d /home/Music/Public/sf2/  "gain 5"
+       [arg1 arg2 arg3]            are executed as commands in FluidSynth
 
 
 -------------------------------------------------------------------------------
