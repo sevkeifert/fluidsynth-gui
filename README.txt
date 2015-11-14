@@ -34,7 +34,7 @@ HOW TO USE THE GRAPHICAL USER INTERFACE
        Also, you can type the filter while the SoundFont list has focus.
        Also any SPACE will be translated to a wildcard.
        Press ESCAPE to clear the search filter.
-       The search box can regular expressions as well. use --regex switch 
+       The search box can use regular expressions as well. use --regex switch 
 
     5. Optional: you can set the midi channel you want to use (default = 1) 
     6. Optional: on the second tab, you can set levels for gain, reverb, 

@@ -42,14 +42,14 @@ class FluidSynthApi:
 
 		# memory/font management
 		# we only can load 16 fonts on 16 channels.  unload the rest.
-		self.fontFilesLoaded={}      # font_id: font_file
-		self.fontsInUse=[-1] * 16    # font_id.  position is channel
-		self.instrumentsInUse=[''] * 16  # instrument_name.  position is channel
-		self.selectedChannel = 1     # base 1.  all new instruments load here
-		self.activeChannel = 1       # base 1. last channel loaded 
-		self.activeSoundFontId = -1  # last font loaded
-		self.activeSoundFontFile = ''# last SoundFont loaded
-		self.activeInstrument = ''   # last instrument loaded
+		self.fontFilesLoaded={}        # font_id: font_file
+		self.fontsInUse=[-1] * 16      # font_id. position is channel
+		self.instrumentsInUse=['']*16  # instrument_name. position is channel
+		self.selectedChannel = 1       # 1-based. all new instruments load here
+		self.activeChannel = 1         # 1-based. last used channel 
+		self.activeSoundFontId = -1    # last font loaded
+		self.activeSoundFontFile = ''  # last SoundFont loaded
+		self.activeInstrument = ''     # last instrument loaded
 
 		# socket io settings
 		self.host='localhost'
@@ -648,6 +648,8 @@ class FluidSynthGui(wx.Frame):
 		self.soundFontsFilter = '' 
 		self.dir = '' # working dir
 		self.regex = False # use reg ex in search filter
+		self.lastSelectedPath = '' # preserve selected dir/font if possible
+		self.parentDir = '..' # option to navigate up one dir
 	
 		# persistent data
 		self.data = {}
@@ -1190,14 +1192,18 @@ class FluidSynthGui(wx.Frame):
 		event.Skip()
 
 
-
 	# sound soundfont change
 	def onSelectSoundFont(self, event=None):
 
 		path = self.getSelectedFontFile()
 
-		if path != None and not os.path.isdir(path):
-			# automatically try to open file as sf2
+		if path == None or path == '':
+			return  # nothing to do
+
+		self.lastSelectedPath = path 
+
+		# if user selected a file, automatically try to open the file as sf2
+		if not os.path.isdir(path):
 			self.clearInstrumentList()
 			self.setSoundFont(path)
 		
@@ -1209,6 +1215,8 @@ class FluidSynthGui(wx.Frame):
 	def onDblClickSoundFont(self, event=None):
 
 		path = self.getSelectedFontFile()
+		self.lastSelectedPath = path 
+
 		if os.path.isdir(path):
 			# open directories
 			self.clearInstrumentList()
@@ -1257,6 +1265,7 @@ class FluidSynthGui(wx.Frame):
 			if path != None and os.path.isdir(path):
 				# navigate to the new dir
 				self.changeDir(path,clearSearchFilter=True,giveFocus=True)
+				self.lastSelectedPath = path 
 
 		elif keycode in [ wx.WXK_BACK, wx.WXK_DELETE ]: 
 			# backspace for search filter
@@ -1487,7 +1496,7 @@ class FluidSynthGui(wx.Frame):
 	# may return -1 if not found
 	def getIdxFromFontName(self,path):
 		try:
-			if path == '..':
+			if path == self.parentDir:
 				return 0
 			fontName = os.path.basename(path) 
 			idx = self.soundFonts.index(fontName)
@@ -1536,10 +1545,16 @@ class FluidSynthGui(wx.Frame):
 
 	# change soundFont in fluid synth 
 	def setSoundFont(self, path):
-		if path == '' or os.path.isdir(path):
-			return -1
 
-		# if file, try to load
+		if path == '' or path == None:
+			return -1 # nothing to do 
+
+		self.lastSelectedPath = path # save selection
+
+		if os.path.isdir(path):
+			return -1 # not a sf2 file. don't try to load 
+
+		# assume sf2 file, try to load
 		(id,instrumentsAll) = fluidsynth.initSoundFont(path)
 		if id == -1:
 			instrumentsAll = ['Error: could not load as .sf2 file']
@@ -1597,15 +1612,18 @@ class FluidSynthGui(wx.Frame):
 	# refresh list of soundfonts
 	# expects: changeDir should be called first 
 	def refreshSoundFontList(self, resetInstruments=False, giveFocus=False):
-		oldValue = self.getSelectedFontFile() # preserve selection if possible
+
+		# preserve previous selection if possible
+		oldValue = self.lastSelectedPath # last known dir or font
 
 		self.soundFonts = self.filterSoundFont() # apply search filter
-		self.soundFonts.insert(0, '..') # add up-dir option
+		self.soundFonts.insert(0, self.parentDir) # add up-dir option
 		self.listSoundFont.Set(self.soundFonts)
 
 		idx = self.getIdxFromFontName(oldValue) 
 		if idx < 0:
 			idx = 0 # could not restore old selection.  select first
+
 		self.listSoundFont.SetSelection(idx)
 
 		if resetInstruments:
