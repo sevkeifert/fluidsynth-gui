@@ -60,16 +60,22 @@ setup.  Here's how I configured fluidsynth on xubuntu 14.04
 
         sudo dpkg-reconfigure -p high jackd2
 
+	# if you run `ulimit -r -l` should should see output like this:
+
+        $ ulimit -r -l
+		real-time priority              (-r) 95
+		max locked memory       (kbytes, -l) unlimited
+
     # check that your user has perms to use rt.
     # you need to be part of the `audio` group.
 
-        sudo adduser  YOUR_USERNAME  audio
-        ulimit -r -l
-
     # NOTE: Group membership is only updated on login, 
     # so you need to log out and in again if you make changes.
+	# to add your user to the audio group, run:
 
-    # check the limits on the audo group.
+        sudo adduser  YOUR_USERNAME  audio
+
+    # then, check the limits on the audo group.
     # edit this file with sudo:
 
         /etc/security/limits.conf
