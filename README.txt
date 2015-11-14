@@ -168,7 +168,6 @@ Then start the program with a script like:
     aj-snapshot -r jack_connections.cfg
 
 
-
 -------------------------------------------------------------------------------
 COMMAND LINE OPTIONS
 -------------------------------------------------------------------------------
