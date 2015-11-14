@@ -1322,6 +1322,7 @@ class FluidSynthGui(wx.Frame):
 
 		#self.changeDir('.',clearSearchFilter=True)
 		self.clearSearchFilter()
+		self.clearInstrumentList()
 		self.refreshSoundFontList()
 
 		channel = self.spinChannel.GetValue()
