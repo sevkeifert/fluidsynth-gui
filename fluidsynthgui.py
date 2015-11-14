@@ -1190,6 +1190,7 @@ class FluidSynthGui(wx.Frame):
 		event.Skip()
 
 
+
 	# sound soundfont change
 	def onSelectSoundFont(self, event=None):
 
@@ -1197,7 +1198,7 @@ class FluidSynthGui(wx.Frame):
 
 		if path != None and not os.path.isdir(path):
 			# automatically try to open file as sf2
-			self.instruments = [] # refresh list 
+			self.clearInstrumentList()
 			self.setSoundFont(path)
 		
 		if event != None:
@@ -1210,7 +1211,7 @@ class FluidSynthGui(wx.Frame):
 		path = self.getSelectedFontFile()
 		if os.path.isdir(path):
 			# open directories
-			self.instruments = [] # refresh list 
+			self.clearInstrumentList()
 			self.changeDir(path,clearSearchFilter=True,giveFocus=True)
 		
 		if event != None:
@@ -1674,6 +1675,13 @@ class FluidSynthGui(wx.Frame):
 	# since 99% of the soundfonts I use have less than 10 instruments
 	def filterInstruments(self):
 		return self.instrumentsAll;
+
+
+	# remove all instruments from listing
+	def clearInstrumentList(self):
+		self.instruments = [] 
+		self.instrumentsAll = [] 
+		self.refreshInstrumentList()	
 
 
 	# remove filter, force refresh of file listing
