@@ -27,9 +27,6 @@ however, and so far I've only tested it with:
 HOW TO USE THE GRAPHICAL USER INTERFACE
 -------------------------------------------------------------------------------
 
-The interface is designed for real-time performance and sampling of a large
-number of sound fonts.
-
     1. Select a folder that contains *.sf2 files. 
        Either browse for a folder or type it directly in the text box.
 
@@ -37,15 +34,15 @@ number of sound fonts.
 
     3. LEFT/RIGHT arrows will cycle through the instruments in each file
 
-	4. Also, you can type a search filter while the SoundFont list has focus.
+    4. Also, you can type a search filter while the SoundFont list has focus.
 
-       SPACE					is translated to a wildcard
+       SPACE                    is translated to a wildcard
        ESCAPE                   completely clear the search filter
        BACKSPACE/DELETE         delete the last character(s) typed
 
        The search box can use regular expressions as well. use --regex switch 
 
-	5. You can navigate folders from directly inside the SoundFont list box.
+    5. You can navigate folders from directly inside the SoundFont list box.
 
        ENTER or DOUBLE-CLICK    open the folder
        select ".."              go up to the parent folder.
@@ -77,18 +74,18 @@ setup.  Here's how I configured fluidsynth on xubuntu 14.04
 
         sudo dpkg-reconfigure -p high jackd2
 
-	# if you run `ulimit -r -l` should should see output like this:
+    # if you run `ulimit -r -l` should should see output like this:
 
         $ ulimit -r -l
-		real-time priority              (-r) 95
-		max locked memory       (kbytes, -l) unlimited
+        real-time priority              (-r) 95
+        max locked memory       (kbytes, -l) unlimited
 
     # check that your user has perms to use rt.
     # you need to be part of the `audio` group.
 
     # NOTE: Group membership is only updated on login, 
     # so you need to log out and in again if you make changes.
-	# to add your user to the audio group, run:
+    # to add your user to the audio group, run:
 
         sudo adduser  YOUR_USERNAME  audio
 
@@ -130,7 +127,7 @@ RUN THE GUI
 
 To start the GUI, just run:
 
-	python fluidsynthgui.py
+    python fluidsynthgui.py
 
 
 This is the only file.
