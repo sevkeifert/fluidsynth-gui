@@ -220,21 +220,21 @@ Here are all the FluidSynth command definitions used:
     select chan font bank prog  Combination of bank-select and program-change
        get var
        set var value
-           synth.gain          0 - 10 
-           synth.reverb.active 1 or 0
-           synth.chorus.activ  1 or 0
-    gain value                 Set the master gain (0 < gain < 5)
-    reverb [0|1|on|off]        Turn the reverb on or off
-    rev_setroomsize num        Change reverb room size. 0-1
-    rev_setdamp num            Change reverb damping. 0-1
-    rev_setwidth num           Change reverb width. 0-1
-    rev_setlevel num           Change reverb level. 0-1
-    chorus [0|1|on|off]        Turn the chorus on or off
-    cho_set_nr n               Use n delay lines (default 3)
-    cho_set_level num          Set output level of each chorus line to num
-    cho_set_speed num          Set mod speed of chorus to num (Hz)
-    cho_set_depth num          Set chorus modulation depth to num (ms)
-    reset                      All notes off
+           synth.gain           0 - 10 
+           synth.reverb.active  1 or 0
+           synth.chorus.activ   1 or 0
+    gain value                  Set the master gain (0 < gain < 5)
+    reverb [0|1|on|off]         Turn the reverb on or off
+    rev_setroomsize num         Change reverb room size. 0-1
+    rev_setdamp num             Change reverb damping. 0-1
+    rev_setwidth num            Change reverb width. 0-1
+    rev_setlevel num            Change reverb level. 0-1
+    chorus [0|1|on|off]         Turn the chorus on or off
+    cho_set_nr n                Use n delay lines (default 3)
+    cho_set_level num           Set output level of each chorus line to num
+    cho_set_speed num           Set mod speed of chorus to num (Hz)
+    cho_set_depth num           Set chorus modulation depth to num (ms)
+    reset                       All notes off
 
 
 -------------------------------------------------------------------------------
