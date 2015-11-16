@@ -38,7 +38,7 @@ class FluidSynthApi:
 
 	def __init__(self,options,args):
 
-		print 'init FluidSynth api...'
+		print('init FluidSynth api...')
 
 		# cli
 		self.options = options         # key/value pairs.
@@ -110,15 +110,15 @@ class FluidSynthApi:
 			# looks good
 			return True
 
-		except Exception,e:
-			print 'error: FluidSynth not running?'
-			print 'could not connect to socket:', self.port
-			print e
+		except Exception as e:
+			print('error: FluidSynth not running?')
+			print('could not connect to socket: ' + str(self.port))
+			print(e)
 
 		try:
 			# try starting fluidsynth command line process
-			print 'trying to start fluidsynth ...'
-			print self.fluidsynthCmd
+			print('trying to start fluidsynth ...')
+			print(self.fluidsynthCmd)
 			cmd = self.fluidsynthCmd.split()
 			self.fluidsynth = subprocess.Popen(cmd, shell=False, 
 				stdin=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -129,20 +129,20 @@ class FluidSynthApi:
 					self.connect()
 					return True
 
-				except Exception,e:
-					print e
-					print 'retry ...'
+				except Exception as e:
+					print(e)
+					print('retry ...')
 					time.sleep(.5)
 
-		except Exception,e:
-			print 'error: fluidsynth could not start'
-			print e
+		except Exception as e:
+			print('error: fluidsynth could not start')
+			print(e)
 
-		print 'error: giving up. :('
-		print 'you may try stopping any fluidsynth that is currently running.'
-		print 'for example, on linux:'
-		print '    killall fluidsynth'
-		print '    killall -s 9 fluidsynth'
+		print('error: giving up. :(')
+		print('you may try stopping any fluidsynth that is currently running.')
+		print('for example, on linux:')
+		print('    killall fluidsynth')
+		print('    killall -s 9 fluidsynth')
 		return False
 
 
@@ -152,7 +152,7 @@ class FluidSynthApi:
 		try:
 			self.fluidsynth.kill()
 		except:
-			print 'fluidsynth will be left running'			
+			print('fluidsynth will be left running')
 
 
 	# create socket connection
@@ -165,7 +165,7 @@ class FluidSynthApi:
 		self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.clientsocket.connect((self.host,self.port))
 		self.clientsocket.settimeout(self.readtimeout)
-		print 'connected to port', self.port
+		print('connected to port: ' + str(self.port))
 
 
 	# cleanup sockets when finished
@@ -173,13 +173,13 @@ class FluidSynthApi:
 
 		self.clientsocket.shutdown(socket.SHUT_RDWR)
 		self.clientsocket.close()
-		print 'closed'
+		print('closed')
 
 
 	# send data to fluidsynth socket
 	def send(self, packet):
 		if self.debug:
-			print 'send:', packet
+			print('send: '+ packet)
 		self.clientsocket.send(packet)
 
 
@@ -210,15 +210,15 @@ class FluidSynthApi:
 						# chop eof marker off
 						data = data[0:pos]
 						if self.debug:
-							print 'data: ' + data + '\n--\n'
+							print('data: ' + data + '\n--\n')
 						return data
 
-		except Exception, e:
-			print 'warn: eof not found in stream: "'+self.eof+'"' 
-			print e
+		except Exception as e:
+			print('warn: eof not found in stream: "'+self.eof+'"') 
+			print(e)
 
 		if self.debug:
-			print 'data (timeout): ' + data + '\n--\n'
+			print('data (timeout): ' + data + '\n--\n')
 		return data
 
 
@@ -332,9 +332,9 @@ class FluidSynthApi:
 			font = self.fontFilesLoaded[font_id]
 			instrument = self.instrumentsInUse[chan0]
 			return (font, instrument)
-		except Exception, e:
-			print 'error: could not find font, instrument on channel '+str(channel)
-			print e
+		except Exception as e:
+			print('error: could not find font, instrument on channel '+str(channel))
+			print(e)
 
 		return ('','')
 
@@ -359,7 +359,6 @@ class FluidSynthApi:
 		try:
 			# try cache
 			id = self.getSoundFontIdFromPath(sf2Filename)
-			#print 'hit cache ', id	
 
 			if id < 0:
 				# cache miss	
@@ -376,9 +375,9 @@ class FluidSynthApi:
 			self.activeSoundFontFile = sf2Filename
 			return id
 
-		except Exception,e:
-			print 'error: could not load font: ' + sf2Filename
-			print e	
+		except Exception as e:
+			print('error: could not load font: ' + sf2Filename)
+			print(e)	
 
 		return -1
 
@@ -406,16 +405,16 @@ class FluidSynthApi:
 						id2=int(parts[0])
 						ids_clean.append(id2)
 
-				except Exception,e:
-					print 'warn: skipping font parse: ' 
-					print parts
-					print e 
+				except Exception as e:
+					print('warn: skipping font parse:')
+					print(parts)
+					print(e) 
 
 			return ids_clean
 
-		except Exception,e:
-			print 'error: no fonts parsed'
-			print e
+		except Exception as e:
+			print('error: no fonts parsed')
+			print(e)
 
 		return []
 
@@ -430,10 +429,10 @@ class FluidSynthApi:
 			ids = self.getSoundFonts()
 			## debug memory management
 			#if self.debug:
-			#	print 'Fonts in use:'
-			#	print self.fontsInUse
-			#	print 'All Fonts in memory:'
-			#	print ids 
+			#	print('Fonts in use:')
+			#	print(self.fontsInUse)
+			#	print('All Fonts in memory:')
+			#	print(ids)
 
 			## unload any soundfont that is not referenced
 			for id in ids:
@@ -445,9 +444,9 @@ class FluidSynthApi:
 					self.cmd('unload '+ sid, True)
 					del self.fontFilesLoaded[id]
 
-		except Exception,e:
-			print 'error: could not unload fonts'
-			print e
+		except Exception as e:
+			print('error: could not unload fonts')
+			print(e)
 
 
 	# list instruments in soundfont, for example:
@@ -468,9 +467,9 @@ class FluidSynthApi:
 			#ids = ids[2:] # cli only: discard first two items (header)
 			return ids
 
-		except Exception,e:
-			print 'error: could not get instruments'
-			print e
+		except Exception as e:
+			print('error: could not get instruments')
+			print(e)
 
 		return []
 
@@ -511,9 +510,9 @@ class FluidSynthApi:
 
 			return data
 
-		except Exception,e:
-			print 'error: could not select instrument: ' + str(fontId)
-			print e
+		except Exception as e:
+			print('error: could not select instrument: '+instrumentName)
+			print(e)
 
 		return False 
 
@@ -529,9 +528,9 @@ class FluidSynthApi:
 				self.setInstrument(voices[0])
 				return (id,voices)
 
-		except Exception,e:
-			print 'error: font and instrument did not load: ' + sf2
-			print e
+		except Exception as e:
+			print('error: font and instrument did not load: '+sf2)
+			print(e)
 
 		return (-1,[])
 
@@ -726,29 +725,29 @@ class FluidSynthGui(wx.Frame):
 	def storeDataFile(self):
 		try:
 			if not os.path.exists(self.dataDir):
-				print 'create preference dir ' + self.dataDir
+				print('create preference dir ' + self.dataDir)
 				os.makedirs(self.dataDir)	
 			data = json.dumps(self.data)
 			f = open(self.dataFile, 'w+')
-			print 'save preferences to ' + self.dataFile
+			print('save preferences to ' + self.dataFile)
 			f.write(data)
 			f.close()
-		except Exception, e:
-			print 'no preference file saved: ' + self.dataFile
-			print e
+		except Exception as e:
+			print('no preference file saved: '+self.dataFile)
+			print(e)
 
 
 	# restore persistent data
 	def loadDataFile(self):
 		try:
-			print 'read preferences from ' + self.dataFile
+			print('read preferences from ' + self.dataFile)
 			f = open(self.dataFile, 'r')
 			data = f.read()
 			f.close()
 			self.data = json.loads(data)
-		except Exception, e:
-			print 'no preference file loaded: ' + self.dataFile
-			print e
+		except Exception as e:
+			print('no preference file loaded: ' + self.dataFile)
+			print(e)
 
 
 	# serialize GUI/api state to self.data
@@ -765,10 +764,10 @@ class FluidSynthGui(wx.Frame):
 						if callable(getvalue):
 							self.setData(prop,getvalue())
 						else:
-							print 'error: ' + prop + ' does not have GetValue()'
-				except Exception, e2:
-					print e2
-					print 'remove property causing error: ' + prop
+							print('error: '+prop+' does not have GetValue()')
+				except Exception as e2:
+					print(e2)
+					print('remove property causing error: ' + prop)
 					self.unsetData(prop)
 
 			# save api properties
@@ -776,18 +775,18 @@ class FluidSynthGui(wx.Frame):
 				try:
 					obj = getattr(self.fluidsynth, prop)
 					self.setData(prop,obj)
-				except Exception, e2:
-					print e2
-					print 'remove property causing error: ' + prop
+				except Exception as e2:
+					print(e2)
+					print('remove property causing error: ' + prop)
 					self.unsetData(prop)
 
 			# avoid leaving spaces in search filter
 			search = self.getData('textFilterSoundFont').strip(' \t\n\r') 
 			self.setData('textFilterSoundFont',search)
 
-		except Exception, e:
-			print 'error: could not take snapshot of preferences'
-			print e
+		except Exception as e:
+			print('error: could not take snapshot of preferences')
+			print(e)
 		
 
 	# retore state of GUI/api to last snapshot
@@ -803,7 +802,7 @@ class FluidSynthGui(wx.Frame):
 					if callable(setvalue):
 						setvalue(self.getData(prop))
 					else:
-						print 'error: ' + prop + ' does not have SetValue()'
+						print('error: ' + prop + 'does not have SetValue()')
 
 			# trigger change on all level controls to sync api
 			self.onScrollGain()
@@ -814,7 +813,7 @@ class FluidSynthGui(wx.Frame):
 
 			# restore last dir, will restore filtered view
 			path = self.getData('textSoundFontDir')			
-			print 'restore dir path: ' + str(path)
+			print('restore dir path: ' + path)
 			self.changeDir(path,giveFocus=True)
 
 			# restore last fonts in memory
@@ -828,7 +827,7 @@ class FluidSynthGui(wx.Frame):
 			activeInstrument = self.getData('activeInstrument')
 
 			# restore inactive fonts 
-			print 'restore inactive fonts...'
+			print('restore inactive fonts...')
 			for idx, oldFontId in enumerate(fontsInUse):
 
 				if oldFontId == -1: # not in use
@@ -838,22 +837,22 @@ class FluidSynthGui(wx.Frame):
 				font = fontFilesLoaded[str(oldFontId)]
 				instrument = instrumentsInUse[idx]
 
-				print 'found '
-				print '	channel: ' + str(channel) 
-				print '	font: ' + str(font) 
-				print '	instrument: ' + str(instrument) 
-				print '--'
+				print('found ')
+				print('	channel: ' + str(channel))
+				print('	font: ' + font)
+				print('	instrument: ' + instrument)
+				print('--')
 
 				if font == '':
-					print 'error: missing font data'
+					print('error: missing font data')
 					continue
 
 				if instrument == '':
-					print 'error: missing instrument data'
+					print('error: missing instrument data')
 					continue
 
 				if channel == activeChannel and font == activeSoundFontFile and instrument == activeInstrument:
-					print 'found primary font'	
+					print('found primary font')
 					continue
 
 				self.fluidsynth.setSelectedChannel(channel)
@@ -862,7 +861,7 @@ class FluidSynthGui(wx.Frame):
 
 			# restore primary active channel
 			# note: ignoring last selectedChannel if it was unused.
-			print 'restore active channel: ' + str(activeChannel)
+			print('restore active channel: ' + str(activeChannel))
 			self.fluidsynth.setSelectedChannel(activeChannel)
 
 			# restore primary font
@@ -873,9 +872,9 @@ class FluidSynthGui(wx.Frame):
 			if activeInstrument != '':
 				self.setInstrumentByName(activeInstrument)
 
-		except Exception, e:
-			print 'error: could not restore snapshot of preferences'
-			print e
+		except Exception as e:
+			print('error: could not restore snapshot of preferences')
+			print(e)
 			traceback.print_exc()
 
 
@@ -1173,7 +1172,7 @@ class FluidSynthGui(wx.Frame):
 		dlg.SetPath(self.dir)
 		path = None
 		if dlg.ShowModal() == wx.ID_OK:
-			print 'selected: %s\n' % dlg.GetPath()
+			print('selected: ' + dlg.GetPath())
 			path = dlg.GetPath()
 
 		dlg.Destroy()
@@ -1269,8 +1268,8 @@ class FluidSynthGui(wx.Frame):
 					search = search[:-1]
 					self.textFilterSoundFont.SetValue(search)
 					self.onKeyUpFilterSoundFont()
-			except Exception, e:
-				print e
+			except Exception as e:
+				print(e)
 				pass
 
 		elif keycode >= 32 and keycode <= 126:
@@ -1284,8 +1283,8 @@ class FluidSynthGui(wx.Frame):
 				search += a
 				self.textFilterSoundFont.SetValue(search)
 				self.onKeyUpFilterSoundFont()
-			except Exception, e:
-				print e
+			except Exception as e:
+				print(e)
 				pass
 
 		event.Skip()
@@ -1472,7 +1471,7 @@ class FluidSynthGui(wx.Frame):
 
 		path = os.path.realpath(path) # cannonical form
 		if not os.path.isdir(path):
-			print 'info: not a directory: ' + path
+			print('info: not a directory: ' + path)
 			return
 
 		if self.dir == path:
@@ -1503,19 +1502,20 @@ class FluidSynthGui(wx.Frame):
 	# idx is the position in the select list (if in bounds)
 
 	# what sound font is at list position?  
+	# this returns the full path to the file.
 	def getSoundFontFileFromIdx(self,idx):
 		try:
 			if idx > -1:
 				selected = self.soundFonts[idx]
 				path = self.dir + '/' + selected
 				return path
-		except Exception, e:
-			print e
+		except Exception as e:
+			print(e)
 		return ''
 
 
 	# what is the list index for a given font name?  
-	# arg may be full path or just font filename.sf2
+	# the arg may be the full path or just font filename.sf2
 	# may return -1 if not found
 	def getIdxFromSoundFontName(self,path):
 		try:
@@ -1524,20 +1524,21 @@ class FluidSynthGui(wx.Frame):
 			fontName = os.path.basename(path) 
 			idx = self.soundFonts.index(fontName)
 			return idx
-		except Exception,e:
-			print e
+		except Exception as e:
+			print(e)
 		return -1	
 		
 
 	# what sound font is actively selected?
+	# this returns the full path to the file.
 	def getSelectedSoundFontFile(self):
 		try:
 			idx = self.listSoundFont.GetSelection()
 			if idx > -1:
 				return self.getSoundFontFileFromIdx(idx)
 
-		except Exception, e:
-			print e
+		except Exception as e:
+			print(e)
 		return ''
 
 
@@ -1547,8 +1548,8 @@ class FluidSynthGui(wx.Frame):
 		try:
 			idx = self.instruments.index(value)
 			return idx
-		except Exception,e:
-			print e
+		except Exception as e:
+			print(e)
 		return -1	
 
 
@@ -1603,21 +1604,21 @@ class FluidSynthGui(wx.Frame):
 			#self.listSoundFont.Focus(-1)
 			id =  self.setSoundFont(path)
 			return id
-		except Exception, e:
-			print "error: could not set sound font by idx: ", idx
-			print e
+		except Exception as e:
+			print('error: could not set sound font by idx: ' + str(idx))
+			print(e)
 		return -1
 
 		
 	# change the instrument in fluidsynth
 	# this does NOT redraw the list of all instruments
-	# like setInstrumentByName but accepts a named instrument, for example
+	# like setInstrumentByName but accepts a named instrument, for example:
 	#    000-000 Dark Violins  
 	# expects: setSoundFont is called first 
 	def setInstrumentByName(self,instrumentName):
 
 		if instrumentName == '':
-			print 'warn: no instrument name'
+			print('warn: no instrument name')
 			return False # nothing to do
 
 		idx = self.instrumentsIdx
@@ -1625,8 +1626,8 @@ class FluidSynthGui(wx.Frame):
 			idx = self.getIdxFromInstrumentName(instrumentName)
 			self.instrumentsIdx = idx
 		except:
-			print 'error: did not resolve name->id for setInstrumentByName'
-			print '    for name:  "' + instrumentName + '"'
+			print('error: did not resolve name->id for setInstrumentByName')
+			print('    for name: "' + instrumentName + '"')
 
 		# visually select instrument in list if needed
 		if idx != self.listInstruments.GetSelection():
@@ -1636,7 +1637,7 @@ class FluidSynthGui(wx.Frame):
 		return self.fluidsynth.setInstrument(instrumentName)	
 
 
-	# like setInstrumentByName, but by list box index
+	# like setInstrumentByName, but set instrument by list box index.
 	# expects: setSoundFont should be called first
 	def setInstrumentByIdx(self,selectedIdx=None):
 		if selectedIdx != None:
@@ -1648,7 +1649,6 @@ class FluidSynthGui(wx.Frame):
 
 
 	# refresh list of soundfonts
-	# expects: changeDir should be called first 
 	def refreshSoundFontList(self, resetInstruments=False, giveFocus=False):
 
 		# preserve previous selection if possible
@@ -1789,9 +1789,9 @@ if __name__ == '__main__':
 		gui = FluidSynthGui(None, title='FluidSynth Gui v1.0',api=fluidsynth)
 		app.MainLoop()
 
-	except Exception, e:
-		print 'exiting...'
-		print e
+	except Exception as e:
+		print('exiting...')
+		print(e)
 		traceback.print_exc()
 
 # end main
