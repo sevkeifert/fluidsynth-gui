@@ -82,7 +82,7 @@ class FluidSynthApi:
 		# -R, --reverb
 		#    Turn the reverb on or off [0|1|yes|no, default = on]
 
-		self.fluidsynthCmd = 'fluidsynth -sli -g5 -C0 -R0 -pFluidSynth-GUI'
+		self.fluidsynthCmd = 'fluidsynth -sli -g 5 -C 0 -R 0 -p FluidSynth-GUI'
 
 
 		# cli option overrides
