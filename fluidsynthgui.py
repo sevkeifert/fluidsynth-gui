@@ -1,22 +1,24 @@
 #!/usr/bin/python
 #
 # Kevin Seifert - GPL 2015
-#
+# 
 # This program creates a simple synthesizer interface for FluidSynth.
 # This interface lets you easily search or cycle through a large set of 
 # sound fonts and select instruments.
-#
+# 
 # See README.txt for more details.
-#
+# 
 # Classes defined below:
-#
-#	FluidSynthApi - this is the core api that interfaces with fluidsynth
+# 
+#   FluidSynthApi - this is the core api that interfaces with fluidsynth
 #                   using the socket api.
-#	FluidSynthGui - the graphical interface wraps the api and saves the state
+# 
+#   FluidSynthGui - the graphical interface wraps the api and saves the state
 #                   of the application on shutdown.
 # 
 # Note on whitespace: 
-#    I'm using tabs (\t) for indentation, with my tab width set at 4 spaces.
+#    I'm using tabs for indentation, with my tab width set at 4 spaces.
+
 
 import sys 
 import os 
@@ -81,7 +83,6 @@ class FluidSynthApi:
 		#    Start FluidSynth as a server process
 		# -R, --reverb
 		#    Turn the reverb on or off [0|1|yes|no, default = on]
-
 		self.fluidsynthCmd = 'fluidsynth -sli -g 5 -C 0 -R 0 -p FluidSynth-GUI'
 
 
@@ -102,9 +103,12 @@ class FluidSynthApi:
 		self.closeFluidSynth()
 
 
+	###########################################################################
+	# socket api
+	###########################################################################
+
 	# test/initialize connection to fluidsynth
 	def initFluidSynth(self):
-
 		try:
 			self.connect()
 			# looks good
@@ -155,13 +159,12 @@ class FluidSynthApi:
 			print('fluidsynth will be left running')
 
 
-	# create socket connection
+	# create socket connection.
 	# NOTE: do NOT connect on every request (like HTTP).
 	# fluidsynth seems to only be able to spawn a small number of total sockets.
 	# reuse the same socket connection for all io, or you will run out of 
 	# fluidsynth threads.
 	def connect(self):
-
 		self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.clientsocket.connect((self.host,self.port))
 		self.clientsocket.settimeout(self.readtimeout)
@@ -170,7 +173,6 @@ class FluidSynthApi:
 
 	# cleanup sockets when finished
 	def close(self):
-
 		self.clientsocket.shutdown(socket.SHUT_RDWR)
 		self.clientsocket.close()
 		print('closed')
@@ -222,12 +224,12 @@ class FluidSynthApi:
 		return data
 
 
-	# full request/response transaction
-	# the end of line '\n' char is not required.
+	# send command to fluidsynth, read response.
 	# NOTE: non-blocking mode is MUCH faster.  
 	# always use non-blocking unless you actually need to read the response.
-	#   returns: data packet (only if blocking)
-	#   returns: True (only if non-blocking)
+	#   returns: data packet (if blocking mode)
+	#   returns: True (if non-blocking mode)
+	# the end of line '\n' char is not required.
 	def cmd(self, packet, non_blocking = False):
 		data = ''
 		self.send(packet+'\n')
@@ -277,10 +279,16 @@ class FluidSynthApi:
 	#			lines = lines + '\n' + line
 
 
-	# getter/setter for fluidsynth config
+	###########################################################################
+	# get/set fluidsynth variable
+	###########################################################################
+
+	# set fluidsynth variable
 	def setValue(self,key,value):
 		value = self.cmd('set ' + key + ' ' + value, True)
 
+
+	# get fluidsynth variable
 	def getValue(self,key):
 		value = self.cmd('get ' + key)
 		values = value.split() 
@@ -290,33 +298,49 @@ class FluidSynthApi:
 			return '' 
 
 
-	# parser utils
+	# parse string variable as boolean 
 	def isTruthy(self,value):
 		value = value.lower()
 		if value in ['true','1','on','yes']:
 			return True
 		return False
+
+
+	# get fluidsynth variable as boolean 
 	def getBoolValue(self,key):
 		value = self.getValue(key)
 		return self.isTruthy(value)
+
+
+	# get fluidsynth variable as number 
 	def getNumValue(self,key):
 		value = self.getValue(key)
 		value = float(value)
 		return value 
+
+
+	# get fluidsynth variable as integer
 	def getIntValue(self,key):
 		value = self.getValue(key)
 		value = int(value)
 		return value 
 
 
-	# channel control
+	###########################################################################
+	# get/set channel, font, instrument
+	###########################################################################
+
+	# set selected channel (index is 1-based) 
 	def setSelectedChannel(self,channel):
 		self.selectedChannel = int(channel)
 
+
+	# get selected channel (where index is 1-based) 
 	def getSelectedChannel(self):
 		return self.selectedChannel
 
-	# 0-based for fluidsynth
+
+	# get selected channel (where index is 0-based) 
 	def getSelectedChannel0(self):
 		return self.selectedChannel-1
 
@@ -350,12 +374,11 @@ class FluidSynthApi:
 
 	# load sound soundfont, for example:
 	#
-	#> load "/home/Music/sf2/Brass 4.SF2"
-	#loaded SoundFont has ID 1
-	#fluidsynth: warning: No preset found on channel 9 [bank=128 prog=0]
-	#> 
+	# > load "/home/Music/sf2/Brass 4.SF2"
+	# loaded SoundFont has ID 1
+	# fluidsynth: warning: No preset found on channel 9 [bank=128 prog=0]
+	# > 
 	def loadSoundFont(self, sf2Filename):
-
 		try:
 			# try cache
 			id = self.getSoundFontIdFromPath(sf2Filename)
@@ -384,10 +407,10 @@ class FluidSynthApi:
 
 	# remove soundfont from memory, for example:
 	#
-	#> fonts
-	#ID  Name
-	# 1  /home/Music/sf2/Brass 4.SF2
-	#> 
+	# > fonts
+	# ID  Name
+	#  1  /home/Music/sf2/Brass 4.SF2
+	# > 
 	def getSoundFonts(self):
 		try:
 			data = self.cmd('fonts')
@@ -421,9 +444,9 @@ class FluidSynthApi:
  
 	# remove unused soundfonts from memory, for example:
 	#
-	#> unload 1
-	#fluidsynth: warning: No preset found on channel 0 [bank=0 prog=0]
-	#> 
+	# > unload 1
+	# fluidsynth: warning: No preset found on channel 0 [bank=0 prog=0]
+	# > 
 	def unloadSoundFonts(self):
 		try:
 			ids = self.getSoundFonts()
@@ -451,12 +474,13 @@ class FluidSynthApi:
 
 	# list instruments in soundfont, for example:
 	# 
-	#> inst 1
-	#000-000 Dark Violins  
-	#> 
+	# > inst 1
+	# 000-000 Dark Violins  
+	# > 
 	def getInstruments(self,fontId):
 
 		fontId = int(fontId)
+
 		if fontId < 0:
 			return []
 
@@ -480,10 +504,12 @@ class FluidSynthApi:
 	#	000-000 Some Voice
 	#	000-000
 	#
-	#note: 'prog bank prog' doesn't always seem to work as expected
-	#using 'select' instead
+	# note: 'prog bank prog' doesn't always seem to work as expected
+	# using 'select' instead
+	#
 	# for example:
-	#select chan sfont bank prog
+	#
+	#    select chan sfont bank prog
 	#> 
 	def setInstrument(self,instrumentName):
 
@@ -535,71 +561,112 @@ class FluidSynthApi:
 		return (-1,[])
 
 
-	# gain api
+	###########################################################################
+	# levels api
+	###########################################################################
+
 	#    gain value                Set the master gain (0 < gain < 5)
-	#    get synth.gain            5.000
+	#    get synth.gain            10
+	# set gain, where value is between [0,5]
 	def setGain(self,value):
 		self.cmd('gain ' + str(value),True) # [0,5]
 		self.setValue('synth.gain',str(float(value)*2)) # [0,10]
 
+
+	# get gain, where value is between [0,5]
 	def getGain(self):
 		self.getNumValue('synth.gain') / 2
 
 
-	# reverb api
+	# turn reverb on/off
 	#    reverb [0|1|on|off]        Turn the reverb on or off
-	#    rev_setroomsize num        Change reverb room size. 0-1
-	#    rev_setdamp num            Change reverb damping. 0-1
-	#    rev_setwidth num           Change reverb width. 0-1
-	#    rev_setlevel num           Change reverb level. 0-1
-	def getReverb(self):
-		value = self.getBoolValue('synth.reverb.active')
-		return value 
-
 	def setReverb(self,boolean):
 		self.cmd('reverb ' + str(int(boolean)),True)
 		# ? not auto updated
 		self.setValue('synth.reverb.active', str(int(boolean))) 
+
+
+	# returns True if reverb is on
+	def getReverb(self):
+		value = self.getBoolValue('synth.reverb.active')
+		return value 
+
+
+	# update reverb settings. num is between [0,1]
+	#    rev_setroomsize num        Change reverb room size. 0 - 1.0
 	def setReverbRoomSize(self,num):
 		self.cmd('rev_setroomsize ' + str(num), True)
+
+
+	# update reverb settings. num is between [0,1]
+	#    rev_setdamp num            Change reverb damping. 0 - 1.0
 	def setReverbDamp(self,num):
 		self.cmd('rev_setdamp ' + str(num), True)
+
+
+	# update reverb settings. num is between [0,1]
+	#    rev_setwidth num           Change reverb width. 0 - 1.0
 	def setReverbWidth(self,num):
 		self.cmd('rev_setwidth ' + str(num), True)
+
+
+	# update reverb settings. num is between [0,1]
+	#    rev_setlevel num           Change reverb level. 0 - 1.0
 	def setReverbLevel(self,num):
 		self.cmd('rev_setlevel ' + str(num), True)
 
+
 	# note: no getters for reverb details	
 
-
 	# chorus api
-	#    cho_set_nr n               Use n delay lines (default 3)
-	#    cho_set_level num          Set output level of each chorus line to num
-	#    cho_set_speed num          Set mod speed of chorus to num (Hz)
-	#    cho_set_depth num          Set chorus modulation depth to num (ms)
-	#    chorus [0|1|on|off]        Turn the chorus on or off
-	def getChorus(self):
-		value = self.getBoolValue('synth.chorus.active')
-		return value 
 
+	# turn chorus on/off
+	# arg: True/False
+	#    chorus [0|1|on|off]        Turn the chorus on or off
+	#	 set synth.chorus.active 1|0
 	def setChorus(self,boolean):
 		self.cmd('chorus ' + str(int(boolean)),True)
 		# ? not auto updated
 		self.setValue('synth.chorus.active', str(int(boolean))) 
 
+
+	# return True if chorus is on.
+	def getChorus(self):
+		value = self.getBoolValue('synth.chorus.active')
+		return value 
+
+
+	# update chorus setting
+	#   cho_set_nr n               Use n delay lines (default 3). 0 - 99
 	def setChorusNR(self,num):
 		self.cmd('cho_set_nr ' + str(num), True)
+
+
+	# update chorus setting
+	#   cho_set_level num          Set output level of each chorus line. 0 - 1.0
 	def setChorusLevel(self,num):
 		self.cmd('cho_set_level ' + str(num), True)
+
+
+	# update chorus setting
+	#   cho_set_speed num          Set mod speed of chorus (Hz). 0.3 - 5.0
 	def setChorusSpeed(self,num):
 		self.cmd('cho_set_speed ' + str(num), True)
+
+
+	# update chorus setting
+	#    cho_set_depth num         Set chorus modulation depth (ms). 0 - 46
 	def setChorusDepth(self,num):
 		self.cmd('cho_set_depth ' + str(num), True)
 
+
 	# note: no getters for chorus details	
 
+	###########################################################################
+	# reset
+	###########################################################################
 
-	# reset (all notes off)
+	# reset controller (all notes off)
 	def panic(self):
 		self.cmd('reset', True)
 
@@ -685,7 +752,7 @@ class FluidSynthGui(wx.Frame):
 		self.bindEvents()              # bind ui widgets to callback event handlers.
 		self.loadDataFile()            # load last state of GUI from file.
 		self.applyPreferenceSnapshot() # restore last state of GUI.
-		self.processArgs()             # cli overrides saved state.
+		self.processCliArgs()          # cli overrides saved state.
 
 		# show
 		self.Centre()
@@ -697,7 +764,7 @@ class FluidSynthGui(wx.Frame):
 	###########################################################################
 
 	# process command line args
-	def processArgs(self):
+	def processCliArgs(self):
 		options = self.fluidsynth.options
 
 		if options.dir != '':
@@ -708,13 +775,19 @@ class FluidSynthGui(wx.Frame):
 		self.regex = options.regex
 
 
-	# getter/setter for persistent data
+	# get persistent data
 	def getData(self,key,default=''):
 		if key in self.data:
 			return self.data[key]
 		return default	
+
+
+	# set persistent data
 	def setData(self,key,value):
 		self.data[key] = value
+
+
+	# unset persistent data
 	def unsetData(self,key):
 		del self.data[key]
 
@@ -752,7 +825,6 @@ class FluidSynthGui(wx.Frame):
 
 	# serialize GUI/api state to self.data
 	def takePreferenceSnapshot(self):
-
 		try:	
 			# save ui widget properties
 			# all objects in list should have a GetValue() function
@@ -791,7 +863,6 @@ class FluidSynthGui(wx.Frame):
 
 	# retore state of GUI/api to last snapshot
 	def applyPreferenceSnapshot(self):
-
 		try:	
 			# restore ui widget properties
 			# all objects in list has a GetValue() function
@@ -976,11 +1047,11 @@ class FluidSynthGui(wx.Frame):
 
 	# widget to control reverb effects
 	# inset panel controls:
-	#reverb [0|1|on|off]        Turn the reverb on or off
-	#rev_setroomsize num        Change reverb room size. 0-1
-	#rev_setdamp num            Change reverb damping. 0-1
-	#rev_setwidth num           Change reverb width. 0-1
-	#rev_setlevel num           Change reverb level. 0-1
+	#   reverb [0|1|on|off]        Turn the reverb on or off
+	#   rev_setroomsize num        Change reverb room size. 0 - 1.0
+	#   rev_setdamp num            Change reverb damping. 0 - 1.0
+	#   rev_setwidth num           Change reverb width. 0 - 1.0
+	#   rev_setlevel num           Change reverb level. 0 - 1.0
 	def createReverbControls(self,panel):
 
 		# ui components
@@ -1036,11 +1107,11 @@ class FluidSynthGui(wx.Frame):
 
 	# widget to control chorus effects
 	# inset panel, sets values
-	# cho_set_nr n               Use n delay lines (default 3). 0-99
-	# cho_set_level num          Set output level of each chorus line to num. 0-1
-	# cho_set_speed num          Set mod speed of chorus to num (Hz). .3-5
-	# cho_set_depth num          Set chorus modulation num (ms).
-	# chorus [0|1|on|off]        Turn the chorus on or off.
+	#   cho_set_nr n               Use n delay lines (default 3). 0 - 99
+	#   cho_set_level num          Set output level of each chorus line . 0 - 1.0
+	#   cho_set_speed num          Set mod speed of chorus (Hz). 0.3 - 5.0
+	#   cho_set_depth num          Set chorus modulation depth (ms). 0 - 46
+	#   chorus [0|1|on|off]        Turn the chorus on or off. 
 	def createChorusControls(self,panel):
 		
 		# ui components
@@ -1156,7 +1227,6 @@ class FluidSynthGui(wx.Frame):
 	# most of these can be called directly (event=None)
 	###########################################################################
 
-
 	# dir change
 	def onKeyUpDirectory(self, event=None):
 		# must be key up to read full text from input
@@ -1218,6 +1288,7 @@ class FluidSynthGui(wx.Frame):
 			event.Skip()
 
 
+	# click instrument in list
 	def onSelectInstrument(self, event=None):
 		idx = self.listInstruments.GetSelection()
 		# NOTE: idx is -1 when using the arrow keys
@@ -1377,7 +1448,7 @@ class FluidSynthGui(wx.Frame):
 		self.fluidsynth.setGain(value)
 
 
-	# reverb 
+	# reverb change
 	def onClickEnableReverb(self,event=None):
 		value = self.cbEnableReverb.GetValue()
 		self.fluidsynth.setReverb(value)	
@@ -1391,24 +1462,28 @@ class FluidSynthGui(wx.Frame):
 			self.onScrollReverbLevel()
 
 
+	# slider change
 	def onScrollReverbDamp(self,event=None):
 		value = self.sReverbDamp.GetValue()
 		value *= 1/100.0  # 100 -> 1
 		self.fluidsynth.setReverbDamp(value) 
 
 
+	# slider change
 	def onScrollReverbRoomSize(self,event=None):
 		value = self.sReverbRoomSize.GetValue()
 		value *= 1/100.0  # 100 -> 1
 		self.fluidsynth.setReverbRoomSize(value) 
 
 
+	# slider change
 	def onScrollReverbWidth(self,event=None):
 		value = self.sReverbWidth.GetValue()
 		value *= 1/100.0  # 100 -> 1
 		self.fluidsynth.setReverbWidth(value) 
 
 
+	# slider change
 	def onScrollReverbLevel(self,event=None):
 		value = self.sReverbLevel.GetValue()
 		value *= 1/100.0  # 100 -> 1
@@ -1429,24 +1504,28 @@ class FluidSynthGui(wx.Frame):
 			self.onScrollChorusDepth()
 
 
+	# slider change
 	def onScrollChorusNR(self,event=None):
 		value = self.sChorusNR.GetValue()
 		# scale: 1 -> 1
 		self.fluidsynth.setChorusNR(value)
 
 
+	# slider change
 	def onScrollChorusLevel(self,event=None):
 		value = self.sChorusLevel.GetValue()
 		value *= 1/100.0 # 100 -> 1
 		self.fluidsynth.setChorusLevel(value)
 
 
+	# slider change
 	def onScrollChorusSpeed(self,event=None):
 		value = self.sChorusSpeed.GetValue()
 		value *= 1/100.0 # 100 -> 1
 		self.fluidsynth.setChorusSpeed(value)
 
 
+	# slider change
 	def onScrollChorusDepth(self,event=None):
 		value = self.sChorusDepth.GetValue()
 		# scale: 1 -> 1
