@@ -249,6 +249,7 @@ I split the API out from the GUI so it can be used or extended for other
 projects if needed.  It's similar to the library pyfluidsynth, except the API
 is using the fluidsynth socket interface instead of lower level c calls.  
 
+
 -------------------------------------------------------------------------------
 HELP, MY AUDIO STOPPED WORKING
 -------------------------------------------------------------------------------
