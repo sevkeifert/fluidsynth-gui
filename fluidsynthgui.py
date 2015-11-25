@@ -405,7 +405,7 @@ class FluidSynthApi:
 		return -1
 
 
-	# remove soundfont from memory, for example:
+	# return soundfonts loaded in memory, for example:
 	#
 	# > fonts
 	# ID  Name
