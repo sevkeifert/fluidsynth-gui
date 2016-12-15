@@ -19,7 +19,7 @@ In theory this GUI can work with Windows, Mac and Linux since it's just using
 fluidsynth's socket interface (over port 9800).  I use Linux as my primary OS,
 however, and so far I've only tested it with: 
 
-    xubuntu 14.04
+    xubuntu 14.04, Ubuntu Mate 16.04
     FluidSynth 1.1.6
 
 
@@ -56,7 +56,28 @@ HOW TO USE THE GRAPHICAL USER INTERFACE
 
 
 -------------------------------------------------------------------------------
-INSTALL/SETUP FLUIDSYNTH ON LINUX
+RUN THE GUI
+-------------------------------------------------------------------------------
+
+To start the GUI, just run:
+
+    python fluidsynthgui.py
+
+
+This is the only file.
+
+-------------------------------------------------------------------------------
+SOUNDFONTS
+-------------------------------------------------------------------------------
+
+The .sf2 files are not included here.  You can download them online (for free).
+
+There are also commercial soundfonts available.
+
+
+
+-------------------------------------------------------------------------------
+TROUBLESHOOTING/CONFIGURING FLUIDSYNTH ON LINUX
 -------------------------------------------------------------------------------
 
 Before you run the GUI, it's assumed that fluidsynth is already installed and
@@ -111,26 +132,6 @@ setup.  Here's how I configured fluidsynth on xubuntu 14.04
 My recommendation is to start jack first (with qjackctl), then start all your
 dependent audio programs.
 
-
--------------------------------------------------------------------------------
-SOUNDFONTS
--------------------------------------------------------------------------------
-
-The .sf2 files are not included here.  You can download them online (for free).
-
-There are also commercial soundfonts available.
-
-
--------------------------------------------------------------------------------
-RUN THE GUI
--------------------------------------------------------------------------------
-
-To start the GUI, just run:
-
-    python fluidsynthgui.py
-
-
-This is the only file.
 
 
 -------------------------------------------------------------------------------
@@ -254,10 +255,13 @@ is using the fluidsynth socket interface instead of lower level c calls.
 HELP, MY AUDIO STOPPED WORKING
 -------------------------------------------------------------------------------
 
-Occasionally, if jackd does not stop running, it will prevent other audio from
-playing.  On linux, you can stop the jackd service with the command:
+Occasionally, if jackd does not exit cleanly, it will prevent other audio from
+playing.  This seemed to be a more frequent problem in Linux years ago, though
+audio seems largely stable now.
+
+On linux, you can stop the jackd service with the command:
 
     killall jackd
 
-
+This will bring back all standard audio. 
 
