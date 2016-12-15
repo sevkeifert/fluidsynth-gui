@@ -1786,8 +1786,9 @@ class FluidSynthGui(wx.Frame):
 				and self.listInstruments.GetCount() > 0:
 			try:
 
-				#self.listInstruments.SetSelection(self.instrumentsIdx)
-				self.listInstruments.SetSelection(0)
+				self.listInstruments.SetSelection(self.instrumentsIdx)
+				#self.listInstruments.SetSelection(0)
+
 			except Exception as e:
 				print('Could not set instrument')
 				print(e)
