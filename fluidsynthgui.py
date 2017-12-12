@@ -62,7 +62,7 @@ class FluidSynthApi:
 		self.host='localhost'          # fluidsynth hostname.
 		self.port=9800                 # fluidsynth socket port.
 		self.buffersize=4096           # buffer size for socket.
-		self.readtimeout=5             # read timeout in seconds (blocking IO only).
+		self.readtimeout=8             # read timeout in seconds (blocking IO only).
 		self.fluidsynth = None         # the fluidsynth system process.
 		self.eof = '.'                 # arbitrary text to mark the end of stream.
 		self.debug = True              # enable verbose logging to stdout.
@@ -1773,10 +1773,26 @@ class FluidSynthGui(wx.Frame):
 	# this is always drawn from cache
 	# expects: setSoundFont should be called first
 	def refreshInstrumentList(self,selectedIdx=None):
+
+		self.listInstruments.Set(self.instruments)
+
 		if selectedIdx != None: 
 			self.instrumentsIdx = selectedIdx
-		self.listInstruments.Set(self.instruments)
-		self.listInstruments.SetSelection(self.instrumentsIdx)
+
+		print( 'inst idx ' + str(self.instrumentsIdx) );
+
+		if self.instrumentsIdx != None  \
+				and self.instrumentsIdx != self.listInstruments.GetSelection() \
+				and self.listInstruments.GetCount() > 0:
+			try:
+
+				self.listInstruments.SetSelection(self.instrumentsIdx)
+				#self.listInstruments.SetSelection(0)
+
+			except Exception as e:
+				print('Could not set instrument')
+				print(e)
+				traceback.print_exc()
 
 
 	# search 
