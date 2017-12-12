@@ -214,7 +214,7 @@ If the software breaks at some point, one possible cause is syntax or Python
 libraries have changed, and the code needs to be updated to use your version of
 Python.
 
-Another the likely cause is the fluidsynth commands have changed (or the format
+Another likely cause is the fluidsynth commands have changed (or the format
 of the returned data has changed).  You can use the command line interface to
 verify that the string formats are the same as referenced in the comments above
 each low-level cmd() function call.
@@ -231,7 +231,7 @@ Here are all the FluidSynth command definitions used:
        set var value
            synth.gain           0 - 10 
            synth.reverb.active  1 or 0
-           synth.chorus.activ   1 or 0
+           synth.chorus.active  1 or 0
     gain value                  Set the master gain (0 < gain < 5)
     reverb [0|1|on|off]         Turn the reverb on or off
     rev_setroomsize num         Change reverb room size. 0-1
