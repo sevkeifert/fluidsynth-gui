@@ -693,7 +693,7 @@ class FluidSynthGui(wx.Frame):
 
 	def __init__(self, parent, title, api):
 
-		super(FluidSynthGui, self).__init__(parent, title=title, size=(640, 480))
+		super(FluidSynthGui, self).__init__(parent, title=title, size=(800, 480))
 
 		self.fluidsynth = api    # the fluidsynth socket api 
 
@@ -971,8 +971,10 @@ class FluidSynthGui(wx.Frame):
 
 		sizer = wx.BoxSizer()
 		sizer.Add(self.notebook, 1, wx.EXPAND)
+
 		panel.SetSizer(sizer)
-		sizer.Fit(self)
+		#sizer.Fit(self)
+		self.Layout()
 
 
 	# this is the main widget for loading soundfonts
