@@ -19,8 +19,9 @@ In theory this GUI can work with Windows, Mac and Linux since it's just using
 fluidsynth's socket interface (over port 9800).  I use Linux as my primary OS,
 however, and so far I've only tested it with: 
 
-    xubuntu 14.04, Ubuntu Mate 16.04
-    FluidSynth 1.1.6
+    xubuntu 14.04
+    Ubuntu Mate 16.04, 18.04
+    FluidSynth 1.1.6, 1.1.9
 
 
 -------------------------------------------------------------------------------
@@ -81,7 +82,7 @@ TROUBLESHOOTING/CONFIGURING FLUIDSYNTH ON LINUX
 -------------------------------------------------------------------------------
 
 Before you run the GUI, it's assumed that fluidsynth is already installed and
-setup.  Here's how I configured fluidsynth on xubuntu 14.04
+setup.  Here's how I configured fluidsynth on Ubuntu 14.04 through 18.04.
 
     # you'll need the fluidsynth command line program
 
@@ -132,6 +133,28 @@ setup.  Here's how I configured fluidsynth on xubuntu 14.04
 My recommendation is to start jack first (with qjackctl), then start all your
 dependent audio programs.
 
+
+LATENCY:
+
+You will probably need to lower the latency settings in Jack. The default
+setting is high, and you will probably notice a delay between pressing a key
+and hearing sound.
+
+The setting can be changed here:
+
+    QjackCtl -> Settings -> Frames/Period (textbox)
+
+I use a value like 256 (or 11.6 ms).  Restart Jack for the change to take
+effect.  You can experiment with lower settings, if your hardware can handle
+it.  If this value is too low your system will create xrun (buffer overruns)
+which sound like small clicks in the audio.  For example, all my settings may
+look like:
+
+  Realtime: checked
+  Interface: (default)
+  Sample Rate: 44100
+  Frames/Period: 256
+  Periods/Buffer: 2
 
 
 -------------------------------------------------------------------------------
